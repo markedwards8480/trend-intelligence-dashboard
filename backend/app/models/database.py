@@ -7,6 +7,11 @@ import os
 # Determine database URL - use SQLite fallback for local development
 database_url = settings.DATABASE_URL
 
+# Fix common Railway/Heroku issue: postgres:// → postgresql://
+# SQLAlchemy 2.0+ requires the full "postgresql://" scheme
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+
 # If using default PostgreSQL URL and it looks like a placeholder/not configured,
 # fallback to SQLite for local development
 if database_url.startswith("postgresql://postgres:postgres@localhost") and not os.getenv("DATABASE_URL"):
