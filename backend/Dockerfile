@@ -20,7 +20,7 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application code (includes static/ with built React frontend)
 COPY . .
 
 # Expose port

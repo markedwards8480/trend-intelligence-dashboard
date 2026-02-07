@@ -1,5 +1,10 @@
-from fastapi import FastAPI
+import os
+from pathlib import Path
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 
 from app.config import settings
@@ -34,7 +39,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
+# Include API routers
 app.include_router(trends.router)
 app.include_router(moodboards.router)
 app.include_router(monitoring.router)
@@ -52,15 +57,41 @@ async def health_check():
     }
 
 
-@app.get("/")
-async def root():
-    """Root endpoint with API information."""
-    return {
-        "message": f"Welcome to {settings.APP_NAME}",
-        "version": settings.APP_VERSION,
-        "docs": "/docs",
-        "health": "/health",
-    }
+# Serve React frontend as static files
+STATIC_DIR = Path(__file__).parent.parent / "static"
+
+if STATIC_DIR.exists():
+    # Mount static assets (JS, CSS) at /assets
+    assets_dir = STATIC_DIR / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="static-assets")
+
+    # Catch-all route: serve index.html for any non-API route (SPA routing)
+    @app.get("/{full_path:path}")
+    async def serve_spa(request: Request, full_path: str):
+        """Serve the React SPA for any non-API route."""
+        # If the path starts with 'api', let it 404 naturally
+        if full_path.startswith("api"):
+            return {"detail": "Not Found"}
+
+        # Check if the file exists in static directory
+        file_path = STATIC_DIR / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(str(file_path))
+
+        # Default: serve index.html for SPA client-side routing
+        return FileResponse(str(STATIC_DIR / "index.html"))
+else:
+    # No frontend built — show API info at root
+    @app.get("/")
+    async def root():
+        """Root endpoint with API information."""
+        return {
+            "message": f"Welcome to {settings.APP_NAME}",
+            "version": settings.APP_VERSION,
+            "docs": "/docs",
+            "health": "/health",
+        }
 
 
 if __name__ == "__main__":

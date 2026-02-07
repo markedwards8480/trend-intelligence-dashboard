@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     SENDGRID_API_KEY: str = ""
 
     # CORS - accepts "*" or comma-separated origins
-    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,https://trend-intelligence-dashboard-production.up.railway.app"
 
     # Feature flags
     USE_MOCK_AI: bool = True
