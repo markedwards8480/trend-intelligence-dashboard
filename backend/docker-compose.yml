@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: trend-dashboard-postgres
+    environment:
+      POSTGRES_USER: trend_user
+      POSTGRES_PASSWORD: trend_password
+      POSTGRES_DB: trend_dashboard
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trend_user -d trend_dashboard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - trend-network
+
+  # Redis Cache/Task Queue
+  redis:
+    image: redis:7-alpine
+    container_name: trend-dashboard-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - trend-network
+
+  # FastAPI Application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trend-dashboard-api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://trend_user:trend_password@postgres:5432/trend_dashboard
+      REDIS_URL: redis://redis:6379
+      USE_MOCK_AI: "True"
+      CORS_ORIGINS: '["http://localhost:5173","http://localhost:3000","http://localhost:8000"]'
+      # Uncomment and set these for real Claude API analysis
+      # CLAUDE_API_KEY: your_key_here
+      # USE_MOCK_AI: "False"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    networks:
+      - trend-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  postgres_data:
+
+networks:
+  trend-network:
+    driver: bridge
