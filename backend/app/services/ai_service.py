@@ -245,17 +245,31 @@ Return ONLY valid JSON, no additional text."""
             await asyncio.sleep(0.1)
             return [
                 {
-                    "url": "https://www.prettylittlething.com",
-                    "platform": "PrettyLittleThing",
-                    "name": "PrettyLittleThing",
-                    "reasoning": "Fast fashion brand popular with junior girls (15-25), similar price point and aesthetic to SHEIN and Fashion Nova.",
-                    "demographics": ["junior_girls", "young_women"],
+                    "url": "https://www.whowhatwear.com",
+                    "platform": "Who What Wear",
+                    "name": "Who What Wear",
+                    "reasoning": "Top fashion editorial site that surfaces emerging trends early, popular with young women and covers affordable to mid-range fashion.",
+                    "demographics": ["junior_girls", "young_women", "contemporary"],
                 },
                 {
-                    "url": "https://www.boohoo.com",
-                    "platform": "Boohoo",
-                    "name": "Boohoo",
-                    "reasoning": "Budget-friendly fast fashion with strong social media presence, targets similar demographic as your current sources.",
+                    "url": "https://trends.google.com/trends/explore?cat=185",
+                    "platform": "Google Trends",
+                    "name": "Google Trends - Fashion",
+                    "reasoning": "Search trend data reveals what consumers are actively looking for, provides quantitative signal on rising categories, colors, and styles.",
+                    "demographics": ["junior_girls", "young_women", "contemporary", "kids"],
+                },
+                {
+                    "url": "https://www.vogue.com/fashion/trends",
+                    "platform": "Vogue",
+                    "name": "Vogue Trends",
+                    "reasoning": "Leading fashion authority for runway-to-retail trend forecasting, helps identify what's trickling down from designer collections.",
+                    "demographics": ["young_women", "contemporary"],
+                },
+                {
+                    "url": "https://www.refinery29.com/en-us/fashion",
+                    "platform": "Refinery29",
+                    "name": "Refinery29 Fashion",
+                    "reasoning": "Editorial coverage focused on affordable fashion trends, strong alignment with junior and young women demographics.",
                     "demographics": ["junior_girls", "young_women"],
                 },
                 {
@@ -286,11 +300,17 @@ Their primary market is junior girls (15-25) but they also track young women (25
 Currently monitored sources:
 {source_list}
 
-Suggest 3-5 NEW fashion sources (ecommerce sites, social media accounts, or fashion platforms) that would be valuable for tracking trends. Focus on:
-- Budget to mid-range price points (not luxury)
+Suggest 3-5 NEW fashion sources that would be valuable for tracking trends. Include a MIX of:
+- Ecommerce sites (budget to mid-range, not luxury)
+- Fashion magazines and editorial sites (Vogue, Elle, WWD, Who What Wear, Refinery29, etc.)
+- Google Trends or Google Shopping for search data
+- Social media accounts (Instagram, TikTok, Pinterest)
+
+Focus on:
 - Sources popular with the target demographics
-- Platforms with strong trend signals
+- Platforms with strong trend signals (especially early indicators)
 - Sources not already in their list
+- Fashion media that helps predict what's coming next season
 
 Return ONLY valid JSON as an array of objects, each with:
 - url: The website URL

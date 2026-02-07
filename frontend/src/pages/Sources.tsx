@@ -5,8 +5,11 @@ import { DEMOGRAPHICS, DEMOGRAPHIC_LABELS, Demographic, SourceCreate, SourceSugg
 import { analyzeFromSource } from '@/api/sources'
 
 const PLATFORMS = [
+  // Social Media
   { value: 'Instagram', label: 'Instagram', type: 'social' },
   { value: 'TikTok', label: 'TikTok', type: 'social' },
+  { value: 'Pinterest', label: 'Pinterest', type: 'social' },
+  // Ecommerce
   { value: 'SHEIN', label: 'SHEIN', type: 'ecommerce' },
   { value: 'Fashion Nova', label: 'Fashion Nova', type: 'ecommerce' },
   { value: 'Princess Polly', label: 'Princess Polly', type: 'ecommerce' },
@@ -15,6 +18,23 @@ const PLATFORMS = [
   { value: 'PrettyLittleThing', label: 'PrettyLittleThing', type: 'ecommerce' },
   { value: 'Boohoo', label: 'Boohoo', type: 'ecommerce' },
   { value: 'ASOS', label: 'ASOS', type: 'ecommerce' },
+  { value: 'Forever 21', label: 'Forever 21', type: 'ecommerce' },
+  { value: 'Revolve', label: 'Revolve', type: 'ecommerce' },
+  // Fashion Media & Magazines
+  { value: 'Vogue', label: 'Vogue', type: 'media' },
+  { value: 'Elle', label: 'Elle', type: 'media' },
+  { value: 'Harper\'s Bazaar', label: 'Harper\'s Bazaar', type: 'media' },
+  { value: 'WWD', label: 'WWD', type: 'media' },
+  { value: 'Who What Wear', label: 'Who What Wear', type: 'media' },
+  { value: 'Refinery29', label: 'Refinery29', type: 'media' },
+  { value: 'The Zoe Report', label: 'The Zoe Report', type: 'media' },
+  { value: 'Glamour', label: 'Glamour', type: 'media' },
+  { value: 'InStyle', label: 'InStyle', type: 'media' },
+  { value: 'Cosmopolitan', label: 'Cosmopolitan', type: 'media' },
+  // Search & Trend Data
+  { value: 'Google Trends', label: 'Google Trends', type: 'search' },
+  { value: 'Google Shopping', label: 'Google Shopping', type: 'search' },
+  // Other
   { value: 'Other', label: 'Other', type: 'other' },
 ]
 
@@ -105,14 +125,19 @@ export default function Sources() {
     )
   }
 
-  const ecommerceSources = sources.filter((s) => {
-    const plat = PLATFORMS.find((p) => p.value === s.platform)
-    return plat?.type === 'ecommerce' || (!plat && s.platform !== 'Instagram' && s.platform !== 'TikTok')
-  })
+  const getSourceType = (platform: string) => {
+    const plat = PLATFORMS.find((p) => p.value === platform)
+    return plat?.type || 'other'
+  }
 
-  const socialSources = sources.filter((s) =>
-    s.platform === 'Instagram' || s.platform === 'TikTok'
-  )
+  const ecommerceSources = sources.filter((s) => getSourceType(s.platform) === 'ecommerce')
+  const socialSources = sources.filter((s) => getSourceType(s.platform) === 'social')
+  const mediaSources = sources.filter((s) => getSourceType(s.platform) === 'media')
+  const searchSources = sources.filter((s) => getSourceType(s.platform) === 'search')
+  const otherSources = sources.filter((s) => {
+    const t = getSourceType(s.platform)
+    return t === 'other' || (t !== 'ecommerce' && t !== 'social' && t !== 'media' && t !== 'search')
+  })
 
   return (
     <div className="p-6 lg:p-8">
@@ -234,14 +259,10 @@ export default function Sources() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
         <div className="card p-4 text-center">
           <p className="text-2xl font-bold text-accent-900">{sources.length}</p>
           <p className="text-sm text-accent-600">Total Sources</p>
-        </div>
-        <div className="card p-4 text-center">
-          <p className="text-2xl font-bold text-accent-900">{sources.filter((s) => s.active).length}</p>
-          <p className="text-sm text-accent-600">Active</p>
         </div>
         <div className="card p-4 text-center">
           <p className="text-2xl font-bold text-accent-900">{ecommerceSources.length}</p>
@@ -250,6 +271,14 @@ export default function Sources() {
         <div className="card p-4 text-center">
           <p className="text-2xl font-bold text-accent-900">{socialSources.length}</p>
           <p className="text-sm text-accent-600">Social Media</p>
+        </div>
+        <div className="card p-4 text-center">
+          <p className="text-2xl font-bold text-accent-900">{mediaSources.length}</p>
+          <p className="text-sm text-accent-600">Fashion Media</p>
+        </div>
+        <div className="card p-4 text-center">
+          <p className="text-2xl font-bold text-accent-900">{searchSources.length}</p>
+          <p className="text-sm text-accent-600">Search / Trends</p>
         </div>
       </div>
 
@@ -303,6 +332,72 @@ export default function Sources() {
           <h2 className="text-xl font-display font-bold text-accent-900 mb-4">Social Media Accounts</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {socialSources.map((source) => (
+              <SourceCard
+                key={source.id}
+                source={source}
+                onToggle={() => toggleSource(source.id, !source.active)}
+                onDelete={() => removeSource(source.id)}
+                onAnalyze={() => setAnalyzeSourceId(analyzeSourceId === source.id ? null : source.id)}
+                showAnalyze={analyzeSourceId === source.id}
+                analyzeUrl={analyzeUrl}
+                onAnalyzeUrlChange={setAnalyzeUrl}
+                onSubmitAnalyze={() => handleAnalyze(source.id)}
+                analyzing={analyzing}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {mediaSources.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-xl font-display font-bold text-accent-900 mb-4">Fashion Media & Magazines</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {mediaSources.map((source) => (
+              <SourceCard
+                key={source.id}
+                source={source}
+                onToggle={() => toggleSource(source.id, !source.active)}
+                onDelete={() => removeSource(source.id)}
+                onAnalyze={() => setAnalyzeSourceId(analyzeSourceId === source.id ? null : source.id)}
+                showAnalyze={analyzeSourceId === source.id}
+                analyzeUrl={analyzeUrl}
+                onAnalyzeUrlChange={setAnalyzeUrl}
+                onSubmitAnalyze={() => handleAnalyze(source.id)}
+                analyzing={analyzing}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {searchSources.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-xl font-display font-bold text-accent-900 mb-4">Search & Trend Data</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {searchSources.map((source) => (
+              <SourceCard
+                key={source.id}
+                source={source}
+                onToggle={() => toggleSource(source.id, !source.active)}
+                onDelete={() => removeSource(source.id)}
+                onAnalyze={() => setAnalyzeSourceId(analyzeSourceId === source.id ? null : source.id)}
+                showAnalyze={analyzeSourceId === source.id}
+                analyzeUrl={analyzeUrl}
+                onAnalyzeUrlChange={setAnalyzeUrl}
+                onSubmitAnalyze={() => handleAnalyze(source.id)}
+                analyzing={analyzing}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {otherSources.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-xl font-display font-bold text-accent-900 mb-4">Other Sources</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {otherSources.map((source) => (
               <SourceCard
                 key={source.id}
                 source={source}

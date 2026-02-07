@@ -72,7 +72,7 @@ export default function Dashboard() {
   ]
 
   const categories = ['All', 'Dresses', 'Tops', 'Pants', 'Accessories', 'Footwear', 'Outfits']
-  const platforms = ['All', 'Instagram', 'TikTok', 'SHEIN', 'Fashion Nova', 'Princess Polly', 'Zara', 'H&M']
+  const platforms = ['All', 'Instagram', 'TikTok', 'SHEIN', 'Fashion Nova', 'Princess Polly', 'Zara', 'H&M', 'Vogue', 'WWD', 'Google Trends']
 
   return (
     <div className="p-6 lg:p-8">
