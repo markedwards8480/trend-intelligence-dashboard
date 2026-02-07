@@ -44,3 +44,37 @@ def get_db():
 def create_tables():
     """Create all tables in the database."""
     Base.metadata.create_all(bind=engine)
+
+
+def run_migrations():
+    """Add missing columns to existing tables (lightweight migration).
+
+    SQLAlchemy's create_all() only creates new tables — it won't ALTER
+    existing ones.  This function runs idempotent ALTER TABLE statements
+    so new columns land in the production database.
+    """
+    from sqlalchemy import text, inspect
+
+    inspector = inspect(engine)
+
+    def _add_column_if_missing(table: str, column: str, col_type: str, default=None):
+        cols = [c["name"] for c in inspector.get_columns(table)]
+        if column not in cols:
+            stmt = f'ALTER TABLE {table} ADD COLUMN {column} {col_type}'
+            if default is not None:
+                stmt += f' DEFAULT {default}'
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+
+    # --- monitoring_targets additions ---
+    _add_column_if_missing("monitoring_targets", "source_url", "VARCHAR(2048)")
+    _add_column_if_missing("monitoring_targets", "source_name", "VARCHAR(255)")
+    _add_column_if_missing("monitoring_targets", "target_demographics", "JSON")
+    _add_column_if_missing("monitoring_targets", "frequency", "VARCHAR(50)", "'manual'")
+    _add_column_if_missing("monitoring_targets", "trend_count", "INTEGER", "0")
+    _add_column_if_missing("monitoring_targets", "last_scraped_at", "TIMESTAMPTZ")
+
+    # --- trend_items additions ---
+    _add_column_if_missing("trend_items", "demographic", "VARCHAR(50)")
+    _add_column_if_missing("trend_items", "fabrications", "JSON")
+    _add_column_if_missing("trend_items", "source_id", "INTEGER")

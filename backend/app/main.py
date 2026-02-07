@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 
 from app.config import settings
-from app.models.database import create_tables
+from app.models.database import create_tables, run_migrations
 from app.api import trends, moodboards, monitoring, dashboard, sources
 
 # Create tables on startup
@@ -17,6 +17,7 @@ async def lifespan(app: FastAPI):
     """Lifespan context manager for app startup and shutdown."""
     # Startup
     create_tables()
+    run_migrations()
     yield
     # Shutdown
     pass
