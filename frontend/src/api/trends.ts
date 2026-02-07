@@ -13,8 +13,12 @@ export const getDailyTrends = async (params?: {
   limit?: number
   offset?: number
 }): Promise<TrendItem[]> => {
-  const response = await client.get<TrendItem[]>('/trends/daily', { params })
-  return response.data
+  const response = await client.get('/trends/daily', { params })
+  // Backend returns { items: [...], total, limit, offset }
+  const data = response.data
+  const items = Array.isArray(data) ? data : (data.items || [])
+  // Ensure IDs are strings for React keys
+  return items.map((item: any) => ({ ...item, id: String(item.id) }))
 }
 
 export const getTrendById = async (id: string): Promise<TrendItem> => {

@@ -2,15 +2,23 @@ export interface TrendItem {
   id: string
   url: string
   platform: string
+  source_platform?: string
   category: string
   colors: string[]
   style_tags: string[]
   trend_score: number
   engagement_count: number
+  likes?: number
+  comments?: number
+  shares?: number
+  views?: number
   image_url?: string
   ai_analysis: string
+  ai_analysis_text?: string
   created_at: string
+  submitted_at?: string
   updated_at: string
+  last_updated?: string
 }
 
 export interface TrendItemCreate {

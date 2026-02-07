@@ -8,9 +8,14 @@ from datetime import datetime
 class TrendItemCreate(BaseModel):
     """Schema for creating a new trend item."""
     url: str
-    source_platform: str
-    submitted_by: str
+    source_platform: Optional[str] = None
+    platform: Optional[str] = None  # Alias accepted from frontend
+    submitted_by: str = "Mark Edwards"
     image_url: Optional[str] = None
+
+    def get_platform(self) -> str:
+        """Get platform from either field name."""
+        return self.source_platform or self.platform or "Other"
 
 
 class TrendItemResponse(BaseModel):
@@ -44,8 +49,38 @@ class TrendItemResponse(BaseModel):
     status: str
     ai_analysis_text: Optional[str]
 
+    # Frontend-compatible aliases
+    @property
+    def platform(self) -> str:
+        return self.source_platform
+
+    @property
+    def engagement_count(self) -> int:
+        return self.likes + self.comments + self.shares
+
+    @property
+    def ai_analysis(self) -> Optional[str]:
+        return self.ai_analysis_text
+
+    @property
+    def created_at(self) -> datetime:
+        return self.submitted_at
+
+    @property
+    def updated_at(self) -> datetime:
+        return self.last_updated
+
     class Config:
         from_attributes = True
+
+    def model_dump(self, **kwargs):
+        d = super().model_dump(**kwargs)
+        d['platform'] = self.source_platform
+        d['engagement_count'] = (d.get('likes', 0) or 0) + (d.get('comments', 0) or 0) + (d.get('shares', 0) or 0)
+        d['ai_analysis'] = d.get('ai_analysis_text')
+        d['created_at'] = d.get('submitted_at')
+        d['updated_at'] = d.get('last_updated')
+        return d
 
 
 class TrendItemList(BaseModel):

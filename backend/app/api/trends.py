@@ -35,14 +35,15 @@ async def submit_trend(
         raise HTTPException(status_code=400, detail="URL already submitted")
 
     # Run AI analysis
+    platform = trend_create.get_platform()
     analysis = await AIService.analyze_trend(
-        trend_create.url, trend_create.source_platform
+        trend_create.url, platform
     )
 
     # Create trend item
     trend_item = TrendItem(
         url=trend_create.url,
-        source_platform=trend_create.source_platform,
+        source_platform=platform,
         submitted_by=trend_create.submitted_by,
         image_url=trend_create.image_url,
         category=analysis.get("category"),
@@ -90,7 +91,8 @@ async def get_daily_trends(
     offset: int = Query(0, ge=0),
     category: Optional[str] = None,
     source_platform: Optional[str] = None,
-    sort_by: str = Query("trend_score", pattern="^(trend_score|velocity_score|submitted_at)$"),
+    platform: Optional[str] = None,  # Alias accepted from frontend
+    sort_by: str = Query("trend_score"),
     db: Session = Depends(get_db),
 ):
     """
@@ -100,23 +102,24 @@ async def get_daily_trends(
     - limit: Max items to return (1-100)
     - offset: Pagination offset
     - category: Filter by category
-    - source_platform: Filter by source platform
-    - sort_by: Sort by trend_score (default), velocity_score, or submitted_at
+    - source_platform/platform: Filter by source platform
+    - sort_by: Sort by trend_score/score (default), velocity_score, or submitted_at
     """
     query = db.query(TrendItem).filter(TrendItem.status == "active")
 
-    # Apply filters
+    # Apply filters (accept both field names)
+    plat = source_platform or platform
     if category:
         query = query.filter(TrendItem.category == category)
-    if source_platform:
-        query = query.filter(TrendItem.source_platform == source_platform)
+    if plat:
+        query = query.filter(TrendItem.source_platform == plat)
 
-    # Apply sorting
+    # Apply sorting (accept aliases from frontend)
     if sort_by == "velocity_score":
         query = query.order_by(desc(TrendItem.velocity_score))
-    elif sort_by == "submitted_at":
+    elif sort_by in ("submitted_at", "newest"):
         query = query.order_by(desc(TrendItem.submitted_at))
-    else:  # Default: trend_score
+    else:  # Default: trend_score (also accepts "score", "trend_score")
         query = query.order_by(desc(TrendItem.trend_score))
 
     # Get total count

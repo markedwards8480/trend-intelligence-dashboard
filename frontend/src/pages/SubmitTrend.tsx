@@ -48,16 +48,10 @@ export default function SubmitTrend() {
         setSuccess(false)
         setAnalysisResult(null)
       }, 8000)
-    } catch (err) {
-      // Fallback to mock analysis if API fails
-      setAnalysisResult(mockAnalysis)
-      setSuccess(true)
-      setUrl('')
-
-      setTimeout(() => {
-        setSuccess(false)
-        setAnalysisResult(null)
-      }, 8000)
+    } catch (err: any) {
+      // Show real error instead of hiding it
+      const message = err?.response?.data?.detail || err?.message || 'Failed to analyze trend. Please try again.'
+      setError(message)
     } finally {
       setLoading(false)
     }
