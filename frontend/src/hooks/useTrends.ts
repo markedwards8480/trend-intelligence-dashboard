@@ -5,6 +5,7 @@ import * as trendsApi from '@/api/trends'
 export const useTrends = (params?: {
   category?: string
   platform?: string
+  demographic?: string
   sort_by?: string
   limit?: number
   offset?: number
@@ -28,7 +29,7 @@ export const useTrends = (params?: {
     }
 
     fetchTrends()
-  }, [params?.category, params?.platform, params?.sort_by, params?.limit, params?.offset])
+  }, [params?.category, params?.platform, params?.demographic, params?.sort_by, params?.limit, params?.offset])
 
   return { trends, loading, error }
 }

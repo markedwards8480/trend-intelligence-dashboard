@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from datetime import datetime, timedelta
 from collections import Counter
-from typing import List
+from typing import List, Optional
 
 from app.models.database import get_db
 from app.models.models import TrendItem
@@ -12,6 +12,7 @@ from app.schemas.schemas import (
     CategoryStats,
     ColorStats,
     StyleStats,
+    FabricationStats,
     TrendLeader,
 )
 
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 @router.get("/summary", response_model=DashboardSummary)
 async def get_dashboard_summary(
     days: int = Query(7, ge=1, le=90),
+    demographic: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     """
@@ -28,26 +30,35 @@ async def get_dashboard_summary(
 
     Parameters:
     - days: Number of days to look back for statistics
+    - demographic: Filter by demographic (junior_girls, young_women, contemporary, kids)
     """
     cutoff_date = datetime.utcnow() - timedelta(days=days)
 
-    # Get active trends within timeframe
-    trends = db.query(TrendItem).filter(
+    # Base query for active trends within timeframe
+    base_query = db.query(TrendItem).filter(
         TrendItem.status == "active",
         TrendItem.submitted_at >= cutoff_date,
-    ).all()
+    )
+    if demographic:
+        base_query = base_query.filter(TrendItem.demographic == demographic)
+
+    trends = base_query.all()
 
     # Calculate total active trends
-    total_active = db.query(TrendItem).filter(
-        TrendItem.status == "active"
-    ).count()
+    total_query = db.query(TrendItem).filter(TrendItem.status == "active")
+    if demographic:
+        total_query = total_query.filter(TrendItem.demographic == demographic)
+    total_active = total_query.count()
 
     # Calculate new today
     today_cutoff = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    new_today = db.query(TrendItem).filter(
+    today_query = db.query(TrendItem).filter(
         TrendItem.status == "active",
         TrendItem.submitted_at >= today_cutoff,
-    ).count()
+    )
+    if demographic:
+        today_query = today_query.filter(TrendItem.demographic == demographic)
+    new_today = today_query.count()
 
     # Top categories by count
     category_counts = Counter()
@@ -92,6 +103,18 @@ async def get_dashboard_summary(
         for style, count in style_counts.most_common(10)
     ]
 
+    # Trending fabrications (most common)
+    fab_counts = Counter()
+    for trend in trends:
+        if trend.fabrications:
+            for fab in trend.fabrications:
+                fab_counts[fab] += 1
+
+    trending_fabrications = [
+        FabricationStats(fabrication=fab, count=count)
+        for fab, count in fab_counts.most_common(10)
+    ]
+
     # Velocity leaders (top 5 by velocity_score)
     velocity_leaders = [
         TrendLeader(
@@ -108,8 +131,10 @@ async def get_dashboard_summary(
         top_categories=top_categories,
         trending_colors=trending_colors,
         trending_styles=trending_styles,
+        trending_fabrications=trending_fabrications,
         velocity_leaders=velocity_leaders,
         total_active_trends=total_active,
         new_today=new_today,
+        demographic_filter=demographic,
         timestamp=datetime.utcnow(),
     )

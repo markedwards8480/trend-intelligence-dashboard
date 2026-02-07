@@ -46,6 +46,9 @@ async def submit_trend(
         source_platform=platform,
         submitted_by=trend_create.submitted_by,
         image_url=trend_create.image_url,
+        source_id=trend_create.source_id,
+        demographic=analysis.get("demographic") or trend_create.demographic,
+        fabrications=analysis.get("fabrications"),
         category=analysis.get("category"),
         subcategory=analysis.get("subcategory"),
         colors=analysis.get("colors"),
@@ -92,6 +95,7 @@ async def get_daily_trends(
     category: Optional[str] = None,
     source_platform: Optional[str] = None,
     platform: Optional[str] = None,  # Alias accepted from frontend
+    demographic: Optional[str] = None,
     sort_by: str = Query("trend_score"),
     db: Session = Depends(get_db),
 ):
@@ -103,6 +107,7 @@ async def get_daily_trends(
     - offset: Pagination offset
     - category: Filter by category
     - source_platform/platform: Filter by source platform
+    - demographic: Filter by demographic (junior_girls, young_women, contemporary, kids)
     - sort_by: Sort by trend_score/score (default), velocity_score, or submitted_at
     """
     query = db.query(TrendItem).filter(TrendItem.status == "active")
@@ -113,6 +118,8 @@ async def get_daily_trends(
         query = query.filter(TrendItem.category == category)
     if plat:
         query = query.filter(TrendItem.source_platform == plat)
+    if demographic:
+        query = query.filter(TrendItem.demographic == demographic)
 
     # Apply sorting (accept aliases from frontend)
     if sort_by == "velocity_score":

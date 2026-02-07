@@ -44,13 +44,20 @@ class TrendItem(Base):
     # AI Analysis
     ai_analysis_text = Column(Text, nullable=True)  # Narrative analysis from Claude
 
+    # Demographics & Fabrication (Phase 2 expansion)
+    demographic = Column(String(50), nullable=True, index=True)  # junior_girls, young_women, contemporary, kids
+    fabrications = Column(JSON, nullable=True)  # ["cotton", "polyester blend", "silk"]
+    source_id = Column(Integer, ForeignKey("monitoring_targets.id", ondelete="SET NULL"), nullable=True, index=True)
+
     # Relationships
     metrics_history = relationship("TrendMetricsHistory", back_populates="trend_item", cascade="all, delete-orphan")
+    source = relationship("MonitoringTarget", foreign_keys=[source_id])
 
     __table_args__ = (
         Index("idx_trend_items_score_date", "trend_score", "submitted_at"),
         Index("idx_trend_items_velocity_date", "velocity_score", "submitted_at"),
         Index("idx_trend_items_category_status", "category", "status"),
+        Index("idx_trend_items_demographic", "demographic", "status"),
     )
 
 
@@ -122,11 +129,11 @@ class TrendingHashtag(Base):
 
 
 class MonitoringTarget(Base):
-    """Configuration for monitoring specific trends, hashtags, or accounts."""
+    """Configuration for monitoring specific trends, hashtags, accounts, or sources."""
     __tablename__ = "monitoring_targets"
 
     id = Column(Integer, primary_key=True, index=True)
-    type = Column(String(50), nullable=False, index=True)  # hashtag, account, keyword, color, style
+    type = Column(String(50), nullable=False, index=True)  # hashtag, account, keyword, color, style, source
     value = Column(String(255), nullable=False)  # The actual value to monitor
     platform = Column(String(50), nullable=False, index=True)  # instagram, tiktok, pinterest, all
 
@@ -134,6 +141,14 @@ class MonitoringTarget(Base):
     active = Column(Boolean, default=True, index=True)
     added_by = Column(String(255), nullable=False)
     added_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    # Source-specific fields (for type="source")
+    source_url = Column(String(2048), nullable=True)  # Full URL of ecommerce site or account
+    source_name = Column(String(255), nullable=True)  # Display name like "SHEIN", "Zara US"
+    target_demographics = Column(JSON, nullable=True)  # ["junior_girls", "young_women"]
+    frequency = Column(String(50), default="manual")  # daily, weekly, manual
+    trend_count = Column(Integer, default=0)  # Number of trends surfaced from this source
+    last_scraped_at = Column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         Index("idx_monitoring_active_platform", "active", "platform"),

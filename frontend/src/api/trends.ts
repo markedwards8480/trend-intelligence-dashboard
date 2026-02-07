@@ -9,6 +9,7 @@ export const submitTrend = async (data: TrendItemCreate): Promise<TrendItem> => 
 export const getDailyTrends = async (params?: {
   category?: string
   platform?: string
+  demographic?: string
   sort_by?: string
   limit?: number
   offset?: number

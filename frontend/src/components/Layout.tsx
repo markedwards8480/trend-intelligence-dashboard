@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Menu, X, LayoutDashboard, PlusCircle, Image, Radio, BarChart3, TrendingUp } from 'lucide-react'
+import { Menu, X, LayoutDashboard, PlusCircle, Globe, Image, Radio, BarChart3, TrendingUp } from 'lucide-react'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -8,6 +8,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const navItems = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/' },
+    { icon: Globe, label: 'Sources', href: '/sources' },
     { icon: PlusCircle, label: 'Submit Trend', href: '/submit' },
     { icon: Image, label: 'Mood Boards', href: '/moodboards' },
     { icon: Radio, label: 'Monitoring', href: '/monitoring' },

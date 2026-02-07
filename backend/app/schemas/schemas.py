@@ -12,6 +12,8 @@ class TrendItemCreate(BaseModel):
     platform: Optional[str] = None  # Alias accepted from frontend
     submitted_by: str = "Mark Edwards"
     image_url: Optional[str] = None
+    source_id: Optional[int] = None  # Link to a watched source
+    demographic: Optional[str] = None  # junior_girls, young_women, contemporary, kids
 
     def get_platform(self) -> str:
         """Get platform from either field name."""
@@ -49,6 +51,11 @@ class TrendItemResponse(BaseModel):
     status: str
     ai_analysis_text: Optional[str]
 
+    # Demographics & Fabrication
+    demographic: Optional[str] = None
+    fabrications: Optional[List[str]] = None
+    source_id: Optional[int] = None
+
     # Frontend-compatible aliases
     @property
     def platform(self) -> str:
@@ -80,6 +87,9 @@ class TrendItemResponse(BaseModel):
         d['ai_analysis'] = d.get('ai_analysis_text')
         d['created_at'] = d.get('submitted_at')
         d['updated_at'] = d.get('last_updated')
+        d['demographic'] = d.get('demographic')
+        d['fabrications'] = d.get('fabrications')
+        d['source_id'] = d.get('source_id')
         return d
 
 
@@ -199,14 +209,22 @@ class TrendLeader(BaseModel):
     trend_score: float
 
 
+class FabricationStats(BaseModel):
+    """Stats for a single fabrication/material."""
+    fabrication: str
+    count: int
+
+
 class DashboardSummary(BaseModel):
     """Aggregated dashboard summary statistics."""
     top_categories: List[CategoryStats]
     trending_colors: List[ColorStats]
     trending_styles: List[StyleStats]
+    trending_fabrications: List[FabricationStats] = []
     velocity_leaders: List[TrendLeader]
     total_active_trends: int
     new_today: int
+    demographic_filter: Optional[str] = None
     timestamp: datetime
 
 
@@ -224,3 +242,49 @@ class TrendingHashtagResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ============ Source Schemas ============
+
+class SourceCreate(BaseModel):
+    """Schema for adding a watched source."""
+    url: str
+    platform: str  # instagram, tiktok, shein, zara, fashionnova, etc.
+    name: str  # Display name
+    target_demographics: List[str] = []  # ["junior_girls", "young_women"]
+    frequency: str = "manual"  # daily, weekly, manual
+
+
+class SourceResponse(BaseModel):
+    """Schema for source response."""
+    id: int
+    url: str
+    platform: str
+    name: str
+    target_demographics: Optional[List[str]]
+    frequency: str
+    active: bool
+    trend_count: int
+    last_scraped_at: Optional[datetime]
+    added_by: str
+    added_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SourceUpdate(BaseModel):
+    """Schema for updating a source."""
+    active: Optional[bool] = None
+    name: Optional[str] = None
+    target_demographics: Optional[List[str]] = None
+    frequency: Optional[str] = None
+
+
+class SourceSuggestion(BaseModel):
+    """AI-suggested source."""
+    url: str
+    platform: str
+    name: str
+    reasoning: str
+    demographics: List[str] = []

@@ -1,3 +1,24 @@
+// ============ Demographics ============
+
+export const DEMOGRAPHICS = ['junior_girls', 'young_women', 'contemporary', 'kids'] as const
+export type Demographic = typeof DEMOGRAPHICS[number]
+
+export const DEMOGRAPHIC_LABELS: Record<Demographic, string> = {
+  junior_girls: 'Junior Girls (15-25)',
+  young_women: 'Young Women (25-35)',
+  contemporary: 'Contemporary (35+)',
+  kids: 'Kids (6-14)',
+}
+
+export const DEMOGRAPHIC_SHORT_LABELS: Record<Demographic, string> = {
+  junior_girls: 'Junior',
+  young_women: 'Young Women',
+  contemporary: 'Contemporary',
+  kids: 'Kids',
+}
+
+// ============ Trend Items ============
+
 export interface TrendItem {
   id: string
   url: string
@@ -19,12 +40,59 @@ export interface TrendItem {
   submitted_at?: string
   updated_at: string
   last_updated?: string
+  // New fields
+  demographic?: Demographic
+  fabrications?: string[]
+  source_id?: number
 }
 
 export interface TrendItemCreate {
   url: string
   platform: string
+  source_id?: number
+  demographic?: string
 }
+
+// ============ Sources ============
+
+export interface Source {
+  id: number
+  url: string
+  platform: string
+  name: string
+  target_demographics: Demographic[]
+  frequency: string
+  active: boolean
+  trend_count: number
+  last_scraped_at: string | null
+  added_by: string
+  added_at: string
+}
+
+export interface SourceCreate {
+  url: string
+  platform: string
+  name: string
+  target_demographics: string[]
+  frequency: string
+}
+
+export interface SourceUpdate {
+  active?: boolean
+  name?: string
+  target_demographics?: string[]
+  frequency?: string
+}
+
+export interface SourceSuggestion {
+  url: string
+  platform: string
+  name: string
+  reasoning: string
+  demographics: string[]
+}
+
+// ============ Mood Boards ============
 
 export interface MoodBoard {
   id: string
@@ -41,6 +109,8 @@ export interface MoodBoardCreate {
   description: string
 }
 
+// ============ Monitoring ============
+
 export interface MonitoringTarget {
   id: string
   platform: string
@@ -55,6 +125,8 @@ export interface MonitoringTargetCreate {
   search_term: string
 }
 
+// ============ Dashboard ============
+
 export interface DashboardSummary {
   total_trends: number
   new_today: number
@@ -63,6 +135,8 @@ export interface DashboardSummary {
   recent_trends: TrendItem[]
   category_breakdown: Record<string, number>
 }
+
+// ============ Metrics ============
 
 export interface TrendMetrics {
   trend_id: string

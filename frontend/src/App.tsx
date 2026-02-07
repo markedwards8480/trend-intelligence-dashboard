@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import Layout from '@/components/Layout'
 import Dashboard from '@/pages/Dashboard'
+import Sources from '@/pages/Sources'
 import SubmitTrend from '@/pages/SubmitTrend'
 import TrendDetail from '@/pages/TrendDetail'
 import MoodBoards from '@/pages/MoodBoards'
@@ -13,6 +14,7 @@ export default function App() {
     <Layout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/sources" element={<Sources />} />
         <Route path="/submit" element={<SubmitTrend />} />
         <Route path="/trends/:id" element={<TrendDetail />} />
         <Route path="/moodboards" element={<MoodBoards />} />

@@ -2,17 +2,18 @@ import { useState, useEffect } from 'react'
 import { TrendingUp, Zap, Palette, Heart } from 'lucide-react'
 import { useTrends } from '@/hooks/useTrends'
 import TrendCard from '@/components/TrendCard'
-import { TrendItem } from '@/types'
+import { TrendItem, DEMOGRAPHICS, DEMOGRAPHIC_SHORT_LABELS, Demographic } from '@/types'
 import { useNavigate } from 'react-router-dom'
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const [category, setCategory] = useState<string>('')
   const [platform, setPlatform] = useState<string>('')
+  const [demographic, setDemographic] = useState<string>('')
   const [sortBy, setSortBy] = useState<string>('score')
   const [displayTrends, setDisplayTrends] = useState<TrendItem[]>([])
 
-  const { trends: fetchedTrends, loading } = useTrends({ category, platform, sort_by: sortBy })
+  const { trends: fetchedTrends, loading } = useTrends({ category, platform, demographic, sort_by: sortBy })
 
   useEffect(() => {
     let filtered = [...fetchedTrends]
@@ -76,11 +77,40 @@ export default function Dashboard() {
   return (
     <div className="p-6 lg:p-8">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-4xl lg:text-5xl font-display font-bold text-accent-900 mb-2">
           Trend Intelligence
         </h1>
-        <p className="text-lg text-accent-600">Real-time fashion insights for junior customers (15-28)</p>
+        <p className="text-lg text-accent-600">
+          Real-time fashion insights{demographic ? ` for ${DEMOGRAPHIC_SHORT_LABELS[demographic as Demographic]}` : ' across all demographics'}
+        </p>
+      </div>
+
+      {/* Demographic Filter Pills */}
+      <div className="flex flex-wrap gap-2 mb-8">
+        <button
+          onClick={() => setDemographic('')}
+          className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+            !demographic
+              ? 'bg-primary-600 text-white border-primary-600'
+              : 'bg-white text-accent-600 border-accent-200 hover:border-primary-300'
+          }`}
+        >
+          All Demographics
+        </button>
+        {DEMOGRAPHICS.map((demo) => (
+          <button
+            key={demo}
+            onClick={() => setDemographic(demographic === demo ? '' : demo)}
+            className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+              demographic === demo
+                ? 'bg-primary-600 text-white border-primary-600'
+                : 'bg-white text-accent-600 border-accent-200 hover:border-primary-300'
+            }`}
+          >
+            {DEMOGRAPHIC_SHORT_LABELS[demo]}
+          </button>
+        ))}
       </div>
 
       {/* Stats Cards */}
