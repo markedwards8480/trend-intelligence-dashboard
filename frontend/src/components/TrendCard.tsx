@@ -9,6 +9,13 @@ interface TrendCardProps {
   onAddToMoodBoard?: (trend: TrendItem) => void
 }
 
+const formatCount = (num: number): string => {
+  if (!num || isNaN(num)) return '0'
+  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
+  if (num >= 1000) return `${(num / 1000).toFixed(1)}k`
+  return String(num)
+}
+
 export default function TrendCard({ trend, onViewDetail, onAddToMoodBoard }: TrendCardProps) {
   const [isLiked, setIsLiked] = useState(false)
 
@@ -111,15 +118,15 @@ export default function TrendCard({ trend, onViewDetail, onAddToMoodBoard }: Tre
         <div className="flex items-center gap-4 mb-4 text-sm text-accent-600 py-3 border-t border-accent-100">
           <div className="flex items-center gap-1">
             <Heart className="w-4 h-4" />
-            <span className="font-medium">{Math.round(trend.engagement_count * 0.4)}k</span>
+            <span className="font-medium">{formatCount(trend.likes ?? Math.round((trend.engagement_count || 0) * 0.4))}</span>
           </div>
           <div className="flex items-center gap-1">
             <MessageCircle className="w-4 h-4" />
-            <span className="font-medium">{Math.round(trend.engagement_count * 0.15)}k</span>
+            <span className="font-medium">{formatCount(trend.comments ?? Math.round((trend.engagement_count || 0) * 0.15))}</span>
           </div>
           <div className="flex items-center gap-1">
             <Share2 className="w-4 h-4" />
-            <span className="font-medium">{Math.round(trend.engagement_count * 0.08)}k</span>
+            <span className="font-medium">{formatCount(trend.shares ?? Math.round((trend.engagement_count || 0) * 0.08))}</span>
           </div>
         </div>
 

@@ -5,147 +5,67 @@ import TrendCard from '@/components/TrendCard'
 import { TrendItem } from '@/types'
 import { useNavigate } from 'react-router-dom'
 
-const mockTrends: TrendItem[] = [
-  {
-    id: '1',
-    url: 'https://instagram.com/p/abc123',
-    platform: 'Instagram',
-    category: 'Dresses',
-    colors: ['pink', 'white', 'beige'],
-    style_tags: ['Y2K', 'Maxi', 'Summer'],
-    trend_score: 92,
-    engagement_count: 145000,
-    image_url: undefined,
-    ai_analysis: 'This Y2K-inspired maxi dress is trending across influencer circles. The pink and white color combination appeals to the junior demographic.',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: '2',
-    url: 'https://tiktok.com/video/def456',
-    platform: 'TikTok',
-    category: 'Tops',
-    colors: ['black', 'white'],
-    style_tags: ['Crop Top', 'Mesh', 'Edgy'],
-    trend_score: 87,
-    engagement_count: 234000,
-    image_url: undefined,
-    ai_analysis: 'Mesh crop tops with minimalist styling are gaining momentum. High engagement from fashion creators.',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: '3',
-    url: 'https://instagram.com/p/ghi789',
-    platform: 'Instagram',
-    category: 'Accessories',
-    colors: ['gold', 'pink'],
-    style_tags: ['Jewelry', 'Statement', 'Luxury'],
-    trend_score: 78,
-    engagement_count: 98000,
-    image_url: undefined,
-    ai_analysis: 'Gold statement jewelry is making a comeback with a modern twist. Perfect for layering.',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: '4',
-    url: 'https://shein.com/product/jkl012',
-    platform: 'SHEIN',
-    category: 'Pants',
-    colors: ['pink', 'purple'],
-    style_tags: ['Cargo', 'Baggy', 'Streetwear'],
-    trend_score: 85,
-    engagement_count: 167000,
-    image_url: undefined,
-    ai_analysis: 'Cargo pants in unconventional colors are trending. Baggy silhouettes continue to dominate.',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: '5',
-    url: 'https://fashionova.com/p/mno345',
-    platform: 'Fashion Nova',
-    category: 'Outfits',
-    colors: ['black', 'white', 'beige'],
-    style_tags: ['Bodysuit', 'Sexy', 'Monochrome'],
-    trend_score: 81,
-    engagement_count: 212000,
-    image_url: undefined,
-    ai_analysis: 'Monochromatic bodysuits are essential for current fashion. High engagement from the target demographic.',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: '6',
-    url: 'https://instagram.com/p/pqr678',
-    platform: 'Instagram',
-    category: 'Footwear',
-    colors: ['white', 'pink', 'purple'],
-    style_tags: ['Sneakers', 'Platform', 'Chunky'],
-    trend_score: 76,
-    engagement_count: 123000,
-    image_url: undefined,
-    ai_analysis: 'Platform sneakers continue to gain traction. Color combinations matter significantly.',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-]
-
 export default function Dashboard() {
   const navigate = useNavigate()
   const [category, setCategory] = useState<string>('')
   const [platform, setPlatform] = useState<string>('')
   const [sortBy, setSortBy] = useState<string>('score')
-  const [displayTrends, setDisplayTrends] = useState<TrendItem[]>(mockTrends)
+  const [displayTrends, setDisplayTrends] = useState<TrendItem[]>([])
 
   const { trends: fetchedTrends, loading } = useTrends({ category, platform, sort_by: sortBy })
 
   useEffect(() => {
-    const finalTrends = fetchedTrends.length > 0 ? fetchedTrends : mockTrends
-
-    let filtered = [...finalTrends]
-    if (category) {
-      filtered = filtered.filter((t) => t.category === category)
-    }
-    if (platform) {
-      filtered = filtered.filter((t) => t.platform === platform)
-    }
+    let filtered = [...fetchedTrends]
 
     if (sortBy === 'score') {
-      filtered.sort((a, b) => b.trend_score - a.trend_score)
+      filtered.sort((a, b) => (b.trend_score || 0) - (a.trend_score || 0))
     } else if (sortBy === 'engagement') {
-      filtered.sort((a, b) => b.engagement_count - a.engagement_count)
+      filtered.sort((a, b) => (b.engagement_count || 0) - (a.engagement_count || 0))
     } else if (sortBy === 'recent') {
       filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     }
 
     setDisplayTrends(filtered)
-  }, [fetchedTrends, category, platform, sortBy])
+  }, [fetchedTrends, sortBy])
+
+  // Compute dynamic stats from real data
+  const totalTrends = fetchedTrends.length
+  const today = new Date().toISOString().split('T')[0]
+  const newToday = fetchedTrends.filter((t) => t.created_at?.startsWith(today)).length
+
+  // Find the most common color
+  const colorCounts: Record<string, number> = {}
+  fetchedTrends.forEach((t) => (t.colors || []).forEach((c) => { colorCounts[c] = (colorCounts[c] || 0) + 1 }))
+  const trendingColor = Object.entries(colorCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '—'
+
+  // Find the top category
+  const catCounts: Record<string, number> = {}
+  fetchedTrends.forEach((t) => { if (t.category) catCounts[t.category] = (catCounts[t.category] || 0) + 1 })
+  const topCategory = Object.entries(catCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '—'
 
   const stats = [
     {
       icon: TrendingUp,
       label: 'Total Trends Tracked',
-      value: '2,847',
+      value: String(totalTrends),
       color: 'from-primary-400 to-primary-600',
     },
     {
       icon: Zap,
       label: 'New Today',
-      value: '23',
+      value: String(newToday),
       color: 'from-orange-400 to-orange-600',
     },
     {
       icon: Palette,
       label: 'Trending Color',
-      value: 'Soft Pink',
+      value: trendingColor,
       color: 'from-pink-300 to-pink-500',
     },
     {
       icon: Heart,
       label: 'Top Category',
-      value: 'Dresses',
+      value: topCategory,
       color: 'from-red-400 to-red-600',
     },
   ]
@@ -255,18 +175,32 @@ export default function Dashboard() {
       ) : (
         <div className="card p-16 text-center">
           <div className="text-5xl mb-4">👗</div>
-          <h3 className="text-2xl font-display font-bold text-accent-900 mb-2">No Trends Found</h3>
-          <p className="text-accent-600 mb-6">Try adjusting your filters or check back soon for new trends.</p>
-          <button
-            onClick={() => {
-              setCategory('')
-              setPlatform('')
-              setSortBy('score')
-            }}
-            className="btn-primary"
-          >
-            Reset Filters
-          </button>
+          <h3 className="text-2xl font-display font-bold text-accent-900 mb-2">No Trends Yet</h3>
+          <p className="text-accent-600 mb-6">
+            {category || platform
+              ? 'No trends match your filters. Try adjusting them or submit new trends.'
+              : 'Start by submitting fashion URLs to track and analyze trends.'}
+          </p>
+          <div className="flex gap-3 justify-center">
+            {(category || platform) && (
+              <button
+                onClick={() => {
+                  setCategory('')
+                  setPlatform('')
+                  setSortBy('score')
+                }}
+                className="btn-secondary"
+              >
+                Reset Filters
+              </button>
+            )}
+            <button
+              onClick={() => navigate('/submit')}
+              className="btn-primary"
+            >
+              Submit a Trend
+            </button>
+          </div>
         </div>
       )}
     </div>
