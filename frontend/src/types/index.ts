@@ -117,6 +117,15 @@ export interface SocialDiscoveryResponse {
   total_influencers: number
 }
 
+// ============ Seed Generation ============
+
+export interface SeedGenerationResponse {
+  created: number
+  skipped: number
+  sources_processed: number
+  errors: number
+}
+
 // ============ Mood Boards ============
 
 export interface MoodBoard {

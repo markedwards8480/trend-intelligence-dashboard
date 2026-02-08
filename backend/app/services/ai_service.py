@@ -510,3 +510,99 @@ Return ONLY valid JSON, no additional text."""
             print(f"Warning: Social account discovery failed: {e}")
             traceback.print_exc()
             raise  # Re-raise so endpoint can return error details
+
+    @staticmethod
+    async def generate_seed_trends(
+        brands: List[Dict],
+        trends_per_brand: int = 5,
+        batch_size: int = 5,
+    ) -> List[Dict]:
+        """
+        Use AI to generate realistic trending product data for ecommerce brands.
+        This populates the dashboard with trend items based on what each brand would stock.
+
+        Args:
+            brands: List of dicts with name, url, id (source_id)
+            trends_per_brand: How many products per brand
+            batch_size: How many brands per AI call
+
+        Returns:
+            List of trend dicts ready to insert as TrendItems
+        """
+        if not settings.CLAUDE_API_KEY:
+            raise ValueError("CLAUDE_API_KEY not configured")
+
+        try:
+            from anthropic import Anthropic
+            import json
+
+            client = Anthropic(api_key=settings.CLAUDE_API_KEY)
+            all_results = []
+
+            for i in range(0, len(brands), batch_size):
+                batch = brands[i:i + batch_size]
+                brand_list = "\n".join(
+                    f"- {b.get('name', 'Unknown')} ({b.get('url', '')})"
+                    for b in batch
+                )
+
+                prompt = f"""You are helping a women's fast fashion apparel company (Mark Edwards Apparel) populate their trend intelligence dashboard with realistic trending products from competitor brands.
+
+For each brand below, generate {trends_per_brand} REALISTIC trending products that this brand would currently stock in early 2026. Use your knowledge of each brand's actual product range, price point, and target demographic.
+
+Brands:
+{brand_list}
+
+For EACH product, provide:
+- brand: The brand name (must match exactly)
+- product_name: A realistic product name as it would appear on their site
+- product_url: A realistic URL for this product on their site (use real URL patterns like /products/, /p/, /dp/)
+- category: Fashion category (e.g., "midi dress", "crop top", "cargo pants", "mini skirt", "oversized blazer", "platform sneakers", "slip dress", "wide leg jeans", "tank top", "maxi dress")
+- colors: Array of 1-3 colors (e.g., ["black", "cream"], ["sage green"])
+- patterns: Array of patterns (e.g., ["solid"], ["floral", "ditsy"], ["plaid"])
+- style_tags: Array of 2-4 style tags (e.g., ["y2k", "streetwear"], ["clean girl", "minimal"], ["cottagecore", "romantic"])
+- fabrications: Array of materials (e.g., ["cotton"], ["polyester", "spandex"], ["denim"])
+- price_point: "budget" | "mid" | "luxury"
+- demographic: "junior_girls" | "young_women" | "contemporary"
+- narrative: 1-2 sentence explanation of why this product is trending
+- estimated_likes: Realistic number between 500-50000
+- estimated_comments: Realistic number between 50-5000
+- estimated_shares: Realistic number between 20-2000
+- estimated_views: Realistic number between 5000-500000
+
+IMPORTANT: Make products realistic for each brand's actual style and price range. Use real fashion categories and current 2026 trend language.
+
+Return ONLY valid JSON as a flat array of product objects. Do NOT nest by brand — return one flat array.
+Return ONLY valid JSON, no additional text."""
+
+                message = client.messages.create(
+                    model="claude-sonnet-4-5-20250929",
+                    max_tokens=8192,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+
+                response_text = message.content[0].text
+                cleaned = _clean_json_response(response_text)
+                try:
+                    batch_results = json.loads(cleaned)
+                    # Attach source_id from our brand list
+                    brand_id_map = {b.get('name', ''): b.get('id') for b in batch}
+                    for item in batch_results:
+                        brand_name = item.get('brand', '')
+                        item['source_id'] = brand_id_map.get(brand_name)
+                    all_results.extend(batch_results)
+                except json.JSONDecodeError as je:
+                    print(f"JSON parse error on seed batch {i//batch_size + 1}: {je}")
+                    print(f"Response preview (first 500 chars): {cleaned[:500]}")
+
+                # Small delay between batches to avoid rate limiting
+                if i + batch_size < len(brands):
+                    await asyncio.sleep(1)
+
+            return all_results
+
+        except Exception as e:
+            import traceback
+            print(f"Warning: Seed trend generation failed: {e}")
+            traceback.print_exc()
+            raise

@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Globe, Plus, Trash2, ExternalLink, Sparkles, ChevronDown, ChevronUp, Power, Search, Upload, Instagram } from 'lucide-react'
+import { Globe, Plus, Trash2, ExternalLink, Sparkles, ChevronDown, ChevronUp, Power, Search, Upload, Instagram, Zap } from 'lucide-react'
 import { useSources, useSourceSuggestions } from '@/hooks/useSources'
 import { DEMOGRAPHICS, DEMOGRAPHIC_LABELS, Demographic, SourceCreate, SourceSuggestion } from '@/types'
 import { analyzeFromSource } from '@/api/sources'
+import { seedTrendsFromSources } from '@/api/trends'
 import ExcelImportModal from '@/components/ExcelImportModal'
 import SocialDiscoveryModal from '@/components/SocialDiscoveryModal'
 
@@ -48,6 +49,26 @@ export default function Sources() {
 
   // Social discovery modal
   const [showSocialDiscovery, setShowSocialDiscovery] = useState(false)
+
+  // Seed trends state
+  const [seeding, setSeeding] = useState(false)
+  const [seedResult, setSeedResult] = useState<{ created: number; skipped: number; errors: number } | null>(null)
+  const [seedError, setSeedError] = useState('')
+
+  const handleSeedTrends = async () => {
+    if (!confirm('Generate ~200 AI trend items from your ecommerce brands? This may take 2-3 minutes.')) return
+    setSeeding(true)
+    setSeedError('')
+    setSeedResult(null)
+    try {
+      const result = await seedTrendsFromSources()
+      setSeedResult(result)
+    } catch (err: any) {
+      setSeedError(err.response?.data?.detail || err.message || 'Seed generation failed')
+    } finally {
+      setSeeding(false)
+    }
+  }
 
   // Suggestions visibility
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -148,6 +169,14 @@ export default function Sources() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleSeedTrends}
+            disabled={seeding}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 transition-all shadow-sm disabled:opacity-50"
+          >
+            <Zap className="w-5 h-5" />
+            {seeding ? 'Generating...' : 'Populate Trends'}
+          </button>
           <button
             onClick={() => setShowSocialDiscovery(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 transition-all shadow-sm"
@@ -267,6 +296,33 @@ export default function Sources() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Seed Generation Status */}
+      {seeding && (
+        <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800">
+          <div className="flex items-center gap-3">
+            <div className="animate-spin w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full" />
+            <div>
+              <p className="font-medium">Generating trend data from your ecommerce brands...</p>
+              <p className="text-sm">AI is analyzing 40 brands and creating ~200 trending products. This takes 2-3 minutes.</p>
+            </div>
+          </div>
+        </div>
+      )}
+      {seedResult && (
+        <div className="mb-6 p-4 rounded-xl bg-green-50 border border-green-200 text-green-800">
+          <p className="font-medium">
+            {seedResult.created} trends created from {sources.filter(s => s.platform === 'ecommerce').length} brands!
+            {seedResult.skipped > 0 && ` (${seedResult.skipped} duplicates skipped)`}
+          </p>
+          <a href="/" className="text-sm underline hover:text-green-900">View Dashboard →</a>
+        </div>
+      )}
+      {seedError && (
+        <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-800">
+          <p className="font-medium">Seed generation failed: {seedError}</p>
         </div>
       )}
 

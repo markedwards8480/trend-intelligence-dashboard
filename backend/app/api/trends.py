@@ -11,7 +11,9 @@ from app.schemas.schemas import (
     TrendItemResponse,
     TrendItemList,
     TrendMetricsResponse,
+    SeedGenerationResponse,
 )
+from app.models.models import MonitoringTarget
 from app.services.ai_service import AIService
 from app.services.scoring_service import ScoringService
 
@@ -90,7 +92,7 @@ async def submit_trend(
 
 @router.get("/daily", response_model=TrendItemList)
 async def get_daily_trends(
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(200, ge=1, le=500),
     offset: int = Query(0, ge=0),
     category: Optional[str] = None,
     source_platform: Optional[str] = None,
@@ -143,6 +145,138 @@ async def get_daily_trends(
     )
 
 
+@router.post("/seed", response_model=SeedGenerationResponse)
+async def seed_trends_from_sources(
+    db: Session = Depends(get_db),
+):
+    """
+    Generate AI seed trends from all ecommerce sources.
+    Uses Claude to create realistic trending products for each brand.
+    """
+    # Get all active ecommerce sources
+    ecommerce = db.query(MonitoringTarget).filter(
+        MonitoringTarget.type == "source",
+        MonitoringTarget.platform == "ecommerce",
+        MonitoringTarget.active == True,
+    ).all()
+
+    if not ecommerce:
+        raise HTTPException(status_code=400, detail="No ecommerce sources found.")
+
+    brands = [
+        {"name": s.source_name, "url": s.source_url, "id": s.id}
+        for s in ecommerce
+    ]
+
+    try:
+        results = await AIService.generate_seed_trends(brands)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Seed generation failed: {str(e)}")
+
+    created = 0
+    skipped = 0
+    errors = 0
+
+    for item in results:
+        try:
+            product_url = item.get("product_url", "")
+            if not product_url:
+                errors += 1
+                continue
+
+            # Check for duplicate URL
+            existing = db.query(TrendItem).filter(TrendItem.url == product_url).first()
+            if existing:
+                skipped += 1
+                continue
+
+            # Create the trend item
+            trend = TrendItem(
+                url=product_url,
+                source_platform="ecommerce",
+                submitted_by="AI Seed Generator",
+                image_url=None,
+                source_id=item.get("source_id"),
+                category=item.get("category"),
+                subcategory=None,
+                colors=item.get("colors", []),
+                patterns=item.get("patterns", []),
+                style_tags=item.get("style_tags", []),
+                fabrications=item.get("fabrications", []),
+                price_point=item.get("price_point", "mid"),
+                demographic=item.get("demographic", "junior_girls"),
+                ai_analysis_text=item.get("narrative", ""),
+                likes=item.get("estimated_likes", 1000),
+                comments=item.get("estimated_comments", 200),
+                shares=item.get("estimated_shares", 50),
+                views=item.get("estimated_views", 10000),
+                engagement_rate=0.0,
+                status="active",
+            )
+
+            # Calculate scores
+            trend = ScoringService.update_trend_scores(trend)
+
+            db.add(trend)
+            db.commit()
+            db.refresh(trend)
+
+            # Record initial metrics
+            metrics = TrendMetricsHistory(
+                trend_item_id=trend.id,
+                likes=trend.likes,
+                comments=trend.comments,
+                shares=trend.shares,
+                views=trend.views,
+                trend_score=trend.trend_score,
+            )
+            db.add(metrics)
+            db.commit()
+
+            created += 1
+
+        except Exception as e:
+            db.rollback()
+            print(f"Error creating seed trend: {e}")
+            errors += 1
+
+    return SeedGenerationResponse(
+        created=created,
+        skipped=skipped,
+        sources_processed=len(ecommerce),
+        errors=errors,
+    )
+
+
+@router.get("/metrics/{trend_id}", response_model=List[TrendMetricsResponse])
+async def get_trend_metrics(
+    trend_id: int,
+    hours: int = Query(24, ge=1, le=720),
+    db: Session = Depends(get_db),
+):
+    """
+    Get time-series metrics data for a trend.
+    """
+    trend = db.query(TrendItem).filter(TrendItem.id == trend_id).first()
+    if not trend:
+        raise HTTPException(status_code=404, detail="Trend not found")
+
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    metrics = (
+        db.query(TrendMetricsHistory)
+        .filter(
+            and_(
+                TrendMetricsHistory.trend_item_id == trend_id,
+                TrendMetricsHistory.recorded_at >= cutoff,
+            )
+        )
+        .order_by(TrendMetricsHistory.recorded_at)
+        .all()
+    )
+
+    return metrics
+
+
 @router.get("/{trend_id}", response_model=TrendItemResponse)
 async def get_trend(
     trend_id: int,
@@ -183,38 +317,3 @@ async def reanalyze_trend(
     db.commit()
     db.refresh(trend)
     return trend
-
-
-@router.get("/metrics/{trend_id}", response_model=List[TrendMetricsResponse])
-async def get_trend_metrics(
-    trend_id: int,
-    hours: int = Query(24, ge=1, le=720),
-    db: Session = Depends(get_db),
-):
-    """
-    Get time-series metrics data for a trend.
-
-    Parameters:
-    - trend_id: The trend item ID
-    - hours: Number of hours of history to retrieve (1-720)
-    """
-    # Verify trend exists
-    trend = db.query(TrendItem).filter(TrendItem.id == trend_id).first()
-    if not trend:
-        raise HTTPException(status_code=404, detail="Trend not found")
-
-    # Get metrics within time window
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
-    metrics = (
-        db.query(TrendMetricsHistory)
-        .filter(
-            and_(
-                TrendMetricsHistory.trend_item_id == trend_id,
-                TrendMetricsHistory.recorded_at >= cutoff,
-            )
-        )
-        .order_by(TrendMetricsHistory.recorded_at)
-        .all()
-    )
-
-    return metrics

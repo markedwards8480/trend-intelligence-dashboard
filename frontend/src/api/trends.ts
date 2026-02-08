@@ -1,5 +1,5 @@
 import client from './client'
-import { TrendItem, TrendItemCreate, TrendMetrics } from '@/types'
+import { TrendItem, TrendItemCreate, TrendMetrics, SeedGenerationResponse } from '@/types'
 
 export const submitTrend = async (data: TrendItemCreate): Promise<TrendItem> => {
   const response = await client.post<TrendItem>('/trends/submit', data)
@@ -34,5 +34,10 @@ export const reanalyzeTrend = async (id: string): Promise<TrendItem> => {
 
 export const getTrendMetrics = async (id: string): Promise<TrendMetrics> => {
   const response = await client.get<TrendMetrics>(`/trends/metrics/${id}`)
+  return response.data
+}
+
+export const seedTrendsFromSources = async (): Promise<SeedGenerationResponse> => {
+  const response = await client.post<SeedGenerationResponse>('/trends/seed')
   return response.data
 }

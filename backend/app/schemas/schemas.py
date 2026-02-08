@@ -336,3 +336,52 @@ class SocialDiscoveryResponse(BaseModel):
     brands: List[BrandSocialDiscovery]
     total_accounts: int
     total_influencers: int
+
+
+# ============ Seed Generation Schemas ============
+
+class SeedGenerationResponse(BaseModel):
+    """Response for AI seed trend generation."""
+    created: int
+    skipped: int
+    sources_processed: int
+    errors: int = 0
+
+
+# ============ Recommendation & Feedback Schemas ============
+
+class RecommendationResponse(BaseModel):
+    """A single AI recommendation."""
+    id: int
+    type: str  # source, influencer, trend
+    title: str
+    description: str
+    url: str
+    platform: str
+    reason: str
+    confidence_score: float
+    status: str  # pending, accepted, rejected, dismissed
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RecommendationFeedback(BaseModel):
+    """Feedback on a recommendation."""
+    status: str  # accepted, rejected, dismissed
+
+
+class UserFeedbackCreate(BaseModel):
+    """Create feedback on a trend or source."""
+    feedback_type: str  # thumbs_up, thumbs_down, saved, dismissed
+    context: Optional[str] = None
+
+
+class FeedbackSummary(BaseModel):
+    """Summary of user feedback for AI context."""
+    total_thumbs_up: int
+    total_thumbs_down: int
+    liked_categories: List[str] = []
+    disliked_categories: List[str] = []
+    liked_sources: List[str] = []
