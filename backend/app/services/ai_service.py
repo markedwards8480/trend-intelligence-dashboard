@@ -484,4 +484,4 @@ Return ONLY valid JSON, no additional text."""
             import traceback
             print(f"Warning: Social account discovery failed: {e}")
             traceback.print_exc()
-            return []
+            raise  # Re-raise so endpoint can return error details
