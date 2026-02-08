@@ -154,3 +154,43 @@ class MonitoringTarget(Base):
         Index("idx_monitoring_active_platform", "active", "platform"),
         Index("idx_monitoring_type_value", "type", "value"),
     )
+
+
+class Recommendation(Base):
+    """AI-generated recommendations for new sources, influencers, or trends."""
+    __tablename__ = "recommendations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    type = Column(String(50), nullable=False, index=True)  # source, influencer, trend
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    url = Column(String(2048), nullable=False)
+    platform = Column(String(50), nullable=False)
+    reason = Column(Text, nullable=True)  # Why AI suggested this
+    confidence_score = Column(Float, default=0.5)
+
+    # Status
+    status = Column(String(20), default="pending", index=True)  # pending, accepted, rejected, dismissed
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    responded_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("idx_recommendations_status", "status", "created_at"),
+    )
+
+
+class UserFeedback(Base):
+    """User feedback on trends, sources, and recommendations for learning."""
+    __tablename__ = "user_feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    entity_type = Column(String(50), nullable=False, index=True)  # trend, source, recommendation
+    entity_id = Column(Integer, nullable=False, index=True)
+    feedback_type = Column(String(20), nullable=False)  # thumbs_up, thumbs_down, saved, dismissed
+    context = Column(Text, nullable=True)  # Optional note
+    recorded_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    __table_args__ = (
+        Index("idx_feedback_entity", "entity_type", "entity_id"),
+        UniqueConstraint("entity_type", "entity_id", "feedback_type", name="uq_feedback_entity"),
+    )

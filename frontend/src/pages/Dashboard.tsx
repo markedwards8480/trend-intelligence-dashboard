@@ -1,9 +1,15 @@
 import { useState, useEffect } from 'react'
-import { TrendingUp, Zap, Palette, Heart } from 'lucide-react'
+import { TrendingUp, Zap, Palette, Heart, Sparkles, Check, X, RefreshCw, ExternalLink } from 'lucide-react'
 import { useTrends } from '@/hooks/useTrends'
 import TrendCard from '@/components/TrendCard'
 import { TrendItem, DEMOGRAPHICS, DEMOGRAPHIC_SHORT_LABELS, Demographic } from '@/types'
 import { useNavigate } from 'react-router-dom'
+import {
+  getRecommendations,
+  generateRecommendations,
+  respondToRecommendation,
+  RecommendationItem,
+} from '@/api/recommendations'
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -13,7 +19,39 @@ export default function Dashboard() {
   const [sortBy, setSortBy] = useState<string>('score')
   const [displayTrends, setDisplayTrends] = useState<TrendItem[]>([])
 
+  // Recommendations state
+  const [recommendations, setRecommendations] = useState<RecommendationItem[]>([])
+  const [recsLoading, setRecsLoading] = useState(false)
+  const [generatingRecs, setGeneratingRecs] = useState(false)
+
   const { trends: fetchedTrends, loading } = useTrends({ category, platform, demographic, sort_by: sortBy })
+
+  // Fetch recommendations on mount
+  useEffect(() => {
+    getRecommendations('pending').then(setRecommendations).catch(() => {})
+  }, [])
+
+  const handleGenerateRecs = async () => {
+    setGeneratingRecs(true)
+    try {
+      await generateRecommendations()
+      const recs = await getRecommendations('pending')
+      setRecommendations(recs)
+    } catch {
+      // silently fail
+    } finally {
+      setGeneratingRecs(false)
+    }
+  }
+
+  const handleRecResponse = async (id: number, status: 'accepted' | 'rejected') => {
+    try {
+      await respondToRecommendation(id, status)
+      setRecommendations((prev) => prev.filter((r) => r.id !== id))
+    } catch {
+      // silently fail
+    }
+  }
 
   useEffect(() => {
     let filtered = [...fetchedTrends]
@@ -188,6 +226,106 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* AI Recommendations Section */}
+      {recommendations.length > 0 && (
+        <div className="card p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary-500" />
+              <h2 className="text-lg font-display font-bold text-accent-900">Recommended for You</h2>
+              <span className="text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-medium">AI</span>
+            </div>
+            <button
+              onClick={handleGenerateRecs}
+              disabled={generatingRecs}
+              className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
+            >
+              <RefreshCw className={`w-4 h-4 ${generatingRecs ? 'animate-spin' : ''}`} />
+              {generatingRecs ? 'Generating...' : 'Get More'}
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {recommendations.slice(0, 6).map((rec) => (
+              <div key={rec.id} className="border border-accent-100 rounded-xl p-4 hover:border-primary-200 transition-colors">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-accent-900 text-sm truncate">{rec.title}</h3>
+                    <span className="inline-block text-xs bg-accent-50 text-accent-600 px-2 py-0.5 rounded mt-1 capitalize">
+                      {rec.platform}
+                    </span>
+                  </div>
+                  <span className="text-xs font-bold text-primary-600 ml-2 shrink-0">
+                    {Math.round(rec.confidence_score * 100)}%
+                  </span>
+                </div>
+                {rec.description && (
+                  <p className="text-xs text-accent-500 mb-2 line-clamp-2">{rec.description}</p>
+                )}
+                <p className="text-xs text-primary-600 mb-3 italic line-clamp-2">{rec.reason}</p>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={rec.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-accent-500 hover:text-primary-600 flex items-center gap-1"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    Visit
+                  </a>
+                  <div className="flex-1" />
+                  <button
+                    onClick={() => handleRecResponse(rec.id, 'accepted')}
+                    className="p-1.5 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition-colors"
+                    title="Accept — add to sources"
+                  >
+                    <Check className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleRecResponse(rec.id, 'rejected')}
+                    className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                    title="Reject"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Generate Recommendations prompt (when none exist) */}
+      {recommendations.length === 0 && !loading && fetchedTrends.length > 0 && (
+        <div className="card p-6 mb-8 border-dashed border-2 border-accent-200 bg-accent-50/50">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Sparkles className="w-5 h-5 text-primary-400" />
+              <div>
+                <h3 className="font-semibold text-accent-800 text-sm">Discover New Sources</h3>
+                <p className="text-xs text-accent-500">Let AI suggest brands, influencers, and trends based on your data</p>
+              </div>
+            </div>
+            <button
+              onClick={handleGenerateRecs}
+              disabled={generatingRecs}
+              className="btn-primary text-sm px-4 py-2"
+            >
+              {generatingRecs ? (
+                <span className="flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Generating...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  Get Recommendations
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Trends Grid */}
       {loading ? (

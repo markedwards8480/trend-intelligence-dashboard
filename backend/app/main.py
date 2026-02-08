@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 
 from app.config import settings
 from app.models.database import create_tables, run_migrations
-from app.api import trends, moodboards, monitoring, dashboard, sources
+from app.api import trends, moodboards, monitoring, dashboard, sources, recommendations
 
 # Create tables on startup
 @asynccontextmanager
@@ -46,6 +46,7 @@ app.include_router(moodboards.router)
 app.include_router(monitoring.router)
 app.include_router(dashboard.router)
 app.include_router(sources.router)
+app.include_router(recommendations.router)
 
 
 # Health check endpoint

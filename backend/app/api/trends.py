@@ -390,6 +390,136 @@ async def seed_status():
     return _seed_status
 
 
+@router.post("/backfill-images")
+async def backfill_images(
+    db: Session = Depends(get_db),
+):
+    """
+    Assign curated fashion stock images to all trends without images.
+    Uses high-quality Unsplash fashion photos organized by category.
+    """
+    import random
+    import hashlib
+
+    # Curated fashion image URLs from Unsplash, organized by category keyword
+    FASHION_IMAGES = {
+        "dress": [
+            "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1539008168-7b6a5a1149e8?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1612336307429-8a898d10e223?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1566174053879-31528523f8ae?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1583496661160-fb5886a0aaaa?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1585487000160-6ebcfceb0d44?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1518622358385-8ea7d0794bf6?w=400&h=500&fit=crop",
+        ],
+        "top": [
+            "https://images.unsplash.com/photo-1434389677669-e08b4cda3a67?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1564859228273-274232fdb516?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1485462537746-965f33f7f6a7?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1525507119028-ed4c629a60a3?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1558171813-4c088753af8f?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=400&h=500&fit=crop",
+        ],
+        "pants": [
+            "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1604176354204-9268737828e4?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1542272604-787c3835535d?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1582418702059-97ebafb35d09?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1475178626620-a4d074967f8c?w=400&h=500&fit=crop",
+        ],
+        "accessories": [
+            "https://images.unsplash.com/photo-1611085583191-a3b181a88401?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1608042314453-ae338d80c427?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1523206489230-c012c64b2b48?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1576053139778-7e32f2ae3d0d?w=400&h=500&fit=crop",
+        ],
+        "footwear": [
+            "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1549298916-b41d501d3772?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1460353581641-37baddab0fa2?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=400&h=500&fit=crop",
+        ],
+        "outerwear": [
+            "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1544022613-e87ca75a784a?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1548624313-0396c75e4b1a?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1551488831-00ddcb6c6bd3?w=400&h=500&fit=crop",
+        ],
+        "outfit": [
+            "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1485968579580-b6d095142e6e?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1487222477894-8943e31ef7b2?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=400&h=500&fit=crop",
+        ],
+        "general": [
+            "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1445205170230-053b83016050?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1558171813-4c088753af8f?w=400&h=500&fit=crop",
+            "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=400&h=500&fit=crop",
+        ],
+    }
+
+    # Map specific categories to image groups
+    CATEGORY_MAP = {
+        "midi dress": "dress", "mini dress": "dress", "slip dress": "dress",
+        "maxi dress": "dress", "shirt dress": "dress", "wrap dress": "dress",
+        "bodycon dress": "dress", "dress": "dress",
+        "crop top": "top", "tank top": "top", "blouse": "top",
+        "t-shirt": "top", "cami top": "top", "corset top": "top",
+        "hoodie": "top", "sweater": "top", "cardigan": "top", "top": "top",
+        "cargo pants": "pants", "wide leg jeans": "pants", "leggings": "pants",
+        "mini skirt": "pants", "skirt": "pants", "shorts": "pants",
+        "wide leg pants": "pants", "jeans": "pants", "trousers": "pants",
+        "joggers": "pants", "pants": "pants",
+        "platform sneakers": "footwear", "boots": "footwear", "heels": "footwear",
+        "sandals": "footwear", "sneakers": "footwear", "mules": "footwear",
+        "loafers": "footwear", "footwear": "footwear",
+        "oversized blazer": "outerwear", "puffer jacket": "outerwear",
+        "trench coat": "outerwear", "denim jacket": "outerwear",
+        "leather jacket": "outerwear", "coat": "outerwear", "jacket": "outerwear",
+        "bag": "accessories", "sunglasses": "accessories", "jewelry": "accessories",
+        "hat": "accessories", "belt": "accessories", "scarf": "accessories",
+        "hair accessories": "accessories", "accessories": "accessories",
+        "matching set": "outfit", "co-ord set": "outfit", "romper": "outfit",
+        "jumpsuit": "outfit", "outfit": "outfit", "set": "outfit",
+    }
+
+    trends = db.query(TrendItem).filter(
+        (TrendItem.image_url == None) | (TrendItem.image_url == ""),
+        TrendItem.status == "active",
+    ).all()
+
+    if not trends:
+        return {"updated": 0, "message": "All trends already have images"}
+
+    updated = 0
+    for trend in trends:
+        cat = (trend.category or "").lower().strip()
+        # Find the image group for this category
+        img_group = CATEGORY_MAP.get(cat, "general")
+        images = FASHION_IMAGES.get(img_group, FASHION_IMAGES["general"])
+        # Use trend ID as seed for consistent, unique assignment
+        idx = trend.id % len(images)
+        trend.image_url = images[idx]
+        updated += 1
+
+    db.commit()
+    return {"updated": updated, "total_trends": len(trends), "message": f"Assigned images to {updated} trends"}
+
+
 @router.get("/metrics/{trend_id}", response_model=List[TrendMetricsResponse])
 async def get_trend_metrics(
     trend_id: int,

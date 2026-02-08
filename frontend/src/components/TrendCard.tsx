@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Heart, MessageCircle, Share2, Plus } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Plus, ThumbsUp, ThumbsDown, ExternalLink } from 'lucide-react'
 import { TrendItem } from '@/types'
 import TrendScoreBadge from './TrendScoreBadge'
+import { submitTrendFeedback } from '@/api/recommendations'
 
 interface TrendCardProps {
   trend: TrendItem
@@ -18,6 +19,17 @@ const formatCount = (num: number): string => {
 
 export default function TrendCard({ trend, onViewDetail, onAddToMoodBoard }: TrendCardProps) {
   const [isLiked, setIsLiked] = useState(false)
+  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null)
+
+  const handleFeedback = async (type: 'up' | 'down') => {
+    const newType = feedback === type ? null : type
+    setFeedback(newType)
+    try {
+      await submitTrendFeedback(Number(trend.id), newType === 'up' ? 'thumbs_up' : 'thumbs_down')
+    } catch {
+      // Silently fail — feedback is non-critical
+    }
+  }
 
   const getColorDot = (color: string) => {
     const colorMap: Record<string, string> = {
@@ -47,15 +59,31 @@ export default function TrendCard({ trend, onViewDetail, onAddToMoodBoard }: Tre
             src={trend.image_url}
             alt={trend.category}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            onError={(e) => {
+              // On broken image, hide img and show fallback
+              const target = e.currentTarget
+              target.style.display = 'none'
+              const fallback = target.nextElementSibling as HTMLElement
+              if (fallback) fallback.style.display = 'flex'
+            }}
           />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-4xl mb-2">👗</div>
-              <p className="text-sm text-accent-500">{trend.platform}</p>
-            </div>
+        ) : null}
+        <div
+          className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-100 via-accent-50 to-primary-200"
+          style={{ display: trend.image_url ? 'none' : 'flex' }}
+        >
+          <div className="text-center px-4">
+            <p className="text-lg font-display font-bold text-accent-800 capitalize mb-1">{trend.category}</p>
+            <p className="text-xs text-accent-500">{trend.platform}</p>
+            {trend.colors && trend.colors.length > 0 && (
+              <div className="flex gap-1 justify-center mt-2">
+                {trend.colors.slice(0, 3).map((c, i) => (
+                  <div key={i} className={`w-3 h-3 rounded-full border border-white/50 ${getColorDot(c)}`} />
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
         {/* Score Badge - Top Right */}
         <div className="absolute top-3 right-3">
@@ -131,13 +159,40 @@ export default function TrendCard({ trend, onViewDetail, onAddToMoodBoard }: Tre
         </div>
 
         {/* Actions */}
-        <button
-          onClick={() => onAddToMoodBoard?.(trend)}
-          className="w-full btn-primary flex items-center justify-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Add to Mood Board
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href={trend.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 btn-primary flex items-center justify-center gap-2 text-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink className="w-4 h-4" />
+            View Product
+          </a>
+          <button
+            onClick={(e) => { e.stopPropagation(); handleFeedback('up'); }}
+            className={`p-2 rounded-lg border transition-colors ${
+              feedback === 'up'
+                ? 'bg-green-100 border-green-300 text-green-700'
+                : 'border-accent-200 text-accent-500 hover:bg-green-50'
+            }`}
+            title="Thumbs up — this trend is relevant"
+          >
+            <ThumbsUp className="w-4 h-4" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); handleFeedback('down'); }}
+            className={`p-2 rounded-lg border transition-colors ${
+              feedback === 'down'
+                ? 'bg-red-100 border-red-300 text-red-700'
+                : 'border-accent-200 text-accent-500 hover:bg-red-50'
+            }`}
+            title="Thumbs down — not relevant"
+          >
+            <ThumbsDown className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   )

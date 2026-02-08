@@ -606,3 +606,73 @@ Return ONLY valid JSON, no additional text."""
             print(f"Warning: Seed trend generation failed: {e}")
             traceback.print_exc()
             raise
+
+    @staticmethod
+    async def generate_recommendations(
+        existing_sources: list,
+        liked: list = None,
+        disliked: list = None,
+        rejected_urls: list = None,
+    ) -> list:
+        """
+        Use AI to generate recommendations for new sources, influencers, and trends.
+        Incorporates user feedback to improve suggestions over time.
+        """
+        if not settings.CLAUDE_API_KEY:
+            raise ValueError("CLAUDE_API_KEY not configured")
+
+        try:
+            from anthropic import Anthropic
+            import json
+
+            client = Anthropic(api_key=settings.CLAUDE_API_KEY)
+
+            # Build feedback context
+            feedback_context = ""
+            if liked:
+                feedback_context += f"\nUser has LIKED these items: {', '.join(liked[:15])}"
+            if disliked:
+                feedback_context += f"\nUser has DISLIKED these items: {', '.join(disliked[:15])}"
+            if rejected_urls:
+                feedback_context += f"\nPreviously REJECTED URLs (do NOT suggest again): {', '.join(rejected_urls[:20])}"
+
+            existing_list = ", ".join(existing_sources[:50])
+
+            prompt = f"""You are helping a women's fast fashion apparel company (Mark Edwards Apparel) discover new sources, influencers, and trends to monitor.
+
+EXISTING SOURCES the company already monitors:
+{existing_list}
+{feedback_context}
+
+Based on this context, suggest 8 NEW sources or influencers that would be valuable for their trend intelligence dashboard. Focus on:
+1. Fast fashion ecommerce sites they're NOT already monitoring
+2. Fashion influencers on Instagram/TikTok who drive junior/young women trends
+3. Emerging brands that are gaining traction in 2026
+
+For EACH recommendation, provide:
+- type: "source" or "influencer"
+- title: Name of the brand/account
+- description: Brief description
+- url: Real URL
+- platform: "ecommerce", "instagram", "tiktok", etc.
+- reason: Why this would be valuable (reference feedback patterns if available)
+- confidence_score: 0.0-1.0 how confident you are this is a good fit
+
+Return ONLY valid JSON as a flat array of recommendation objects. No additional text."""
+
+            message = client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=4096,
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+            response_text = message.content[0].text
+            cleaned = _clean_json_response(response_text)
+            results = json.loads(cleaned)
+            return results if isinstance(results, list) else []
+
+        except Exception as e:
+            import traceback
+            print(f"Warning: Recommendation generation failed: {e}")
+            traceback.print_exc()
+            raise
