@@ -168,146 +168,6 @@ async def bulk_import_sources(
     return SourceBulkResponse(succeeded=succeeded, failed=failed)
 
 
-@router.get("/{source_id}", response_model=SourceResponse)
-async def get_source(
-    source_id: int,
-    db: Session = Depends(get_db),
-):
-    """Get a specific source by ID."""
-    target = db.query(MonitoringTarget).filter(
-        MonitoringTarget.id == source_id,
-        MonitoringTarget.type == "source",
-    ).first()
-    if not target:
-        raise HTTPException(status_code=404, detail="Source not found")
-    return _to_source_response(target)
-
-
-@router.put("/{source_id}", response_model=SourceResponse)
-async def update_source(
-    source_id: int,
-    update: SourceUpdate,
-    db: Session = Depends(get_db),
-):
-    """Update a source's settings."""
-    target = db.query(MonitoringTarget).filter(
-        MonitoringTarget.id == source_id,
-        MonitoringTarget.type == "source",
-    ).first()
-    if not target:
-        raise HTTPException(status_code=404, detail="Source not found")
-
-    if update.active is not None:
-        target.active = update.active
-    if update.name is not None:
-        target.source_name = update.name
-        target.value = update.name
-    if update.target_demographics is not None:
-        target.target_demographics = update.target_demographics
-    if update.frequency is not None:
-        target.frequency = update.frequency
-
-    db.commit()
-    db.refresh(target)
-    return _to_source_response(target)
-
-
-@router.delete("/{source_id}")
-async def delete_source(
-    source_id: int,
-    db: Session = Depends(get_db),
-):
-    """Delete a watched source."""
-    target = db.query(MonitoringTarget).filter(
-        MonitoringTarget.id == source_id,
-        MonitoringTarget.type == "source",
-    ).first()
-    if not target:
-        raise HTTPException(status_code=404, detail="Source not found")
-
-    db.delete(target)
-    db.commit()
-    return {"message": f"Source '{target.source_name}' deleted"}
-
-
-@router.post("/{source_id}/analyze")
-async def analyze_from_source(
-    source_id: int,
-    url: str = Query(..., description="URL of the item to analyze from this source"),
-    db: Session = Depends(get_db),
-):
-    """Submit and analyze a specific URL from a watched source."""
-    # Verify source exists
-    source = db.query(MonitoringTarget).filter(
-        MonitoringTarget.id == source_id,
-        MonitoringTarget.type == "source",
-    ).first()
-    if not source:
-        raise HTTPException(status_code=404, detail="Source not found")
-
-    # Check if URL already exists
-    existing = db.query(TrendItem).filter(TrendItem.url == url).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="URL already analyzed")
-
-    # Run AI analysis
-    from app.services.scoring_service import ScoringService
-    from app.models.models import TrendMetricsHistory
-
-    analysis = await AIService.analyze_trend(url, source.platform)
-
-    # Use source demographics if AI doesn't detect one
-    demographic = analysis.get("demographic")
-    if not demographic and source.target_demographics:
-        demographic = source.target_demographics[0]
-
-    trend_item = TrendItem(
-        url=url,
-        source_platform=source.platform,
-        submitted_by="Mark Edwards",
-        source_id=source.id,
-        demographic=demographic,
-        category=analysis.get("category"),
-        subcategory=analysis.get("subcategory"),
-        colors=analysis.get("colors"),
-        patterns=analysis.get("patterns"),
-        style_tags=analysis.get("style_tags"),
-        fabrications=analysis.get("fabrications"),
-        price_point=analysis.get("price_point"),
-        ai_analysis_text=analysis.get("narrative"),
-        likes=analysis.get("engagement_estimate", 0) // 4,
-        comments=analysis.get("engagement_estimate", 0) // 10,
-        shares=analysis.get("engagement_estimate", 0) // 20,
-        views=analysis.get("engagement_estimate", 0),
-        engagement_rate=0.0,
-        status="active",
-    )
-
-    trend_item = ScoringService.update_trend_scores(trend_item)
-    db.add(trend_item)
-
-    # Update source stats
-    source.trend_count = (source.trend_count or 0) + 1
-    source.last_scraped_at = datetime.utcnow()
-
-    db.commit()
-    db.refresh(trend_item)
-
-    # Record initial metrics
-    metrics = TrendMetricsHistory(
-        trend_item_id=trend_item.id,
-        likes=trend_item.likes,
-        comments=trend_item.comments,
-        shares=trend_item.shares,
-        views=trend_item.views,
-        trend_score=trend_item.trend_score,
-    )
-    db.add(metrics)
-    db.commit()
-
-    return trend_item
-
-
 @router.get("/discover-social-debug")
 async def discover_social_debug(db: Session = Depends(get_db)):
     """Debug endpoint to test AI connectivity."""
@@ -408,3 +268,139 @@ async def suggest_sources(
 
     suggestions = await AIService.suggest_sources(existing_sources)
     return suggestions
+
+
+# ============ Parameterized routes MUST come AFTER all named routes ============
+
+@router.get("/{source_id}", response_model=SourceResponse)
+async def get_source(
+    source_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get a specific source by ID."""
+    target = db.query(MonitoringTarget).filter(
+        MonitoringTarget.id == source_id,
+        MonitoringTarget.type == "source",
+    ).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return _to_source_response(target)
+
+
+@router.put("/{source_id}", response_model=SourceResponse)
+async def update_source(
+    source_id: int,
+    update: SourceUpdate,
+    db: Session = Depends(get_db),
+):
+    """Update a source's settings."""
+    target = db.query(MonitoringTarget).filter(
+        MonitoringTarget.id == source_id,
+        MonitoringTarget.type == "source",
+    ).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Source not found")
+
+    if update.active is not None:
+        target.active = update.active
+    if update.name is not None:
+        target.source_name = update.name
+        target.value = update.name
+    if update.target_demographics is not None:
+        target.target_demographics = update.target_demographics
+    if update.frequency is not None:
+        target.frequency = update.frequency
+
+    db.commit()
+    db.refresh(target)
+    return _to_source_response(target)
+
+
+@router.delete("/{source_id}")
+async def delete_source(
+    source_id: int,
+    db: Session = Depends(get_db),
+):
+    """Delete a watched source."""
+    target = db.query(MonitoringTarget).filter(
+        MonitoringTarget.id == source_id,
+        MonitoringTarget.type == "source",
+    ).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Source not found")
+
+    db.delete(target)
+    db.commit()
+    return {"message": f"Source '{target.source_name}' deleted"}
+
+
+@router.post("/{source_id}/analyze")
+async def analyze_from_source(
+    source_id: int,
+    url: str = Query(..., description="URL of the item to analyze from this source"),
+    db: Session = Depends(get_db),
+):
+    """Submit and analyze a specific URL from a watched source."""
+    source = db.query(MonitoringTarget).filter(
+        MonitoringTarget.id == source_id,
+        MonitoringTarget.type == "source",
+    ).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+
+    existing = db.query(TrendItem).filter(TrendItem.url == url).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="URL already analyzed")
+
+    from app.services.scoring_service import ScoringService
+    from app.models.models import TrendMetricsHistory
+
+    analysis = await AIService.analyze_trend(url, source.platform)
+
+    demographic = analysis.get("demographic")
+    if not demographic and source.target_demographics:
+        demographic = source.target_demographics[0]
+
+    trend_item = TrendItem(
+        url=url,
+        source_platform=source.platform,
+        submitted_by="Mark Edwards",
+        source_id=source.id,
+        demographic=demographic,
+        category=analysis.get("category"),
+        subcategory=analysis.get("subcategory"),
+        colors=analysis.get("colors"),
+        patterns=analysis.get("patterns"),
+        style_tags=analysis.get("style_tags"),
+        fabrications=analysis.get("fabrications"),
+        price_point=analysis.get("price_point"),
+        ai_analysis_text=analysis.get("narrative"),
+        likes=analysis.get("engagement_estimate", 0) // 4,
+        comments=analysis.get("engagement_estimate", 0) // 10,
+        shares=analysis.get("engagement_estimate", 0) // 20,
+        views=analysis.get("engagement_estimate", 0),
+        engagement_rate=0.0,
+        status="active",
+    )
+
+    trend_item = ScoringService.update_trend_scores(trend_item)
+    db.add(trend_item)
+
+    source.trend_count = (source.trend_count or 0) + 1
+    source.last_scraped_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(trend_item)
+
+    metrics = TrendMetricsHistory(
+        trend_item_id=trend_item.id,
+        likes=trend_item.likes,
+        comments=trend_item.comments,
+        shares=trend_item.shares,
+        views=trend_item.views,
+        trend_score=trend_item.trend_score,
+    )
+    db.add(metrics)
+    db.commit()
+
+    return trend_item
