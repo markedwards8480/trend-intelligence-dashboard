@@ -308,6 +308,24 @@ async def analyze_from_source(
     return trend_item
 
 
+@router.get("/discover-social-debug")
+async def discover_social_debug(db: Session = Depends(get_db)):
+    """Debug endpoint to test AI connectivity."""
+    from app.config import settings
+    ecommerce = db.query(MonitoringTarget).filter(
+        MonitoringTarget.type == "source",
+        MonitoringTarget.platform == "ecommerce",
+        MonitoringTarget.active == True,
+    ).all()
+    return {
+        "mock_ai": settings.USE_MOCK_AI,
+        "has_api_key": bool(settings.CLAUDE_API_KEY),
+        "api_key_prefix": settings.CLAUDE_API_KEY[:15] + "..." if settings.CLAUDE_API_KEY else "none",
+        "ecommerce_count": len(ecommerce),
+        "first_brands": [s.source_name for s in ecommerce[:3]],
+    }
+
+
 @router.post("/discover-social", response_model=SocialDiscoveryResponse)
 async def discover_social_accounts(
     db: Session = Depends(get_db),
@@ -328,7 +346,10 @@ async def discover_social_accounts(
         for s in ecommerce
     ]
 
-    results = await AIService.discover_social_accounts(brands)
+    try:
+        results = await AIService.discover_social_accounts(brands)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI discovery failed: {str(e)}")
 
     # Transform raw AI results into typed response
     brand_discoveries = []
