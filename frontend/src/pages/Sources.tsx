@@ -4,39 +4,22 @@ import { useSources, useSourceSuggestions } from '@/hooks/useSources'
 import { DEMOGRAPHICS, DEMOGRAPHIC_LABELS, Demographic, SourceCreate, SourceSuggestion } from '@/types'
 import { analyzeFromSource } from '@/api/sources'
 
-const PLATFORMS = [
-  // Social Media
-  { value: 'Instagram', label: 'Instagram', type: 'social' },
-  { value: 'TikTok', label: 'TikTok', type: 'social' },
-  { value: 'Pinterest', label: 'Pinterest', type: 'social' },
-  // Ecommerce
-  { value: 'SHEIN', label: 'SHEIN', type: 'ecommerce' },
-  { value: 'Fashion Nova', label: 'Fashion Nova', type: 'ecommerce' },
-  { value: 'Princess Polly', label: 'Princess Polly', type: 'ecommerce' },
-  { value: 'Zara', label: 'Zara', type: 'ecommerce' },
-  { value: 'H&M', label: 'H&M', type: 'ecommerce' },
-  { value: 'PrettyLittleThing', label: 'PrettyLittleThing', type: 'ecommerce' },
-  { value: 'Boohoo', label: 'Boohoo', type: 'ecommerce' },
-  { value: 'ASOS', label: 'ASOS', type: 'ecommerce' },
-  { value: 'Forever 21', label: 'Forever 21', type: 'ecommerce' },
-  { value: 'Revolve', label: 'Revolve', type: 'ecommerce' },
-  // Fashion Media & Magazines
-  { value: 'Vogue', label: 'Vogue', type: 'media' },
-  { value: 'Elle', label: 'Elle', type: 'media' },
-  { value: 'Harper\'s Bazaar', label: 'Harper\'s Bazaar', type: 'media' },
-  { value: 'WWD', label: 'WWD', type: 'media' },
-  { value: 'Who What Wear', label: 'Who What Wear', type: 'media' },
-  { value: 'Refinery29', label: 'Refinery29', type: 'media' },
-  { value: 'The Zoe Report', label: 'The Zoe Report', type: 'media' },
-  { value: 'Glamour', label: 'Glamour', type: 'media' },
-  { value: 'InStyle', label: 'InStyle', type: 'media' },
-  { value: 'Cosmopolitan', label: 'Cosmopolitan', type: 'media' },
-  // Search & Trend Data
-  { value: 'Google Trends', label: 'Google Trends', type: 'search' },
-  { value: 'Google Shopping', label: 'Google Shopping', type: 'search' },
-  // Other
-  { value: 'Other', label: 'Other', type: 'other' },
+// Source categories — user picks the type, brand name comes from the Source Name field
+const SOURCE_CATEGORIES = [
+  { value: 'ecommerce', label: 'Ecommerce Site' },
+  { value: 'social', label: 'Social Media' },
+  { value: 'media', label: 'Fashion Media / Magazine' },
+  { value: 'search', label: 'Search & Trends' },
+  { value: 'other', label: 'Other' },
 ]
+
+const CATEGORY_LABELS: Record<string, string> = {
+  ecommerce: 'Ecommerce',
+  social: 'Social Media',
+  media: 'Fashion Media',
+  search: 'Search & Trends',
+  other: 'Other',
+}
 
 export default function Sources() {
   const { sources, loading, addSource, removeSource, toggleSource, refetch } = useSources()
@@ -45,7 +28,7 @@ export default function Sources() {
   // Add source form state
   const [showAddForm, setShowAddForm] = useState(false)
   const [formUrl, setFormUrl] = useState('')
-  const [formPlatform, setFormPlatform] = useState('SHEIN')
+  const [formPlatform, setFormPlatform] = useState('ecommerce')
   const [formName, setFormName] = useState('')
   const [formDemographics, setFormDemographics] = useState<string[]>(['junior_girls'])
   const [formFrequency, setFormFrequency] = useState('manual')
@@ -88,11 +71,21 @@ export default function Sources() {
     }
   }
 
+  // Map AI suggestion platform names to our category values
+  const platformToCategory = (platform: string): string => {
+    const p = platform.toLowerCase()
+    if (['instagram', 'tiktok', 'pinterest', 'youtube'].some(s => p.includes(s))) return 'social'
+    if (['vogue', 'elle', 'wwd', 'harper', 'refinery', 'glamour', 'instyle', 'cosmo', 'who what wear', 'zoe report'].some(s => p.includes(s))) return 'media'
+    if (['google trends', 'google shopping'].some(s => p.includes(s))) return 'search'
+    // Default most fashion sites to ecommerce
+    return 'ecommerce'
+  }
+
   const handleAddSuggestion = async (suggestion: SourceSuggestion) => {
     try {
       await addSource({
         url: suggestion.url,
-        platform: suggestion.platform,
+        platform: platformToCategory(suggestion.platform),
         name: suggestion.name,
         target_demographics: suggestion.demographics,
         frequency: 'manual',
@@ -125,19 +118,14 @@ export default function Sources() {
     )
   }
 
-  const getSourceType = (platform: string) => {
-    const plat = PLATFORMS.find((p) => p.value === platform)
-    return plat?.type || 'other'
-  }
-
-  const ecommerceSources = sources.filter((s) => getSourceType(s.platform) === 'ecommerce')
-  const socialSources = sources.filter((s) => getSourceType(s.platform) === 'social')
-  const mediaSources = sources.filter((s) => getSourceType(s.platform) === 'media')
-  const searchSources = sources.filter((s) => getSourceType(s.platform) === 'search')
-  const otherSources = sources.filter((s) => {
-    const t = getSourceType(s.platform)
-    return t === 'other' || (t !== 'ecommerce' && t !== 'social' && t !== 'media' && t !== 'search')
-  })
+  // Group sources by their platform (which is now a category value)
+  const ecommerceSources = sources.filter((s) => s.platform === 'ecommerce')
+  const socialSources = sources.filter((s) => s.platform === 'social')
+  const mediaSources = sources.filter((s) => s.platform === 'media')
+  const searchSources = sources.filter((s) => s.platform === 'search')
+  const otherSources = sources.filter((s) =>
+    !['ecommerce', 'social', 'media', 'search'].includes(s.platform)
+  )
 
   return (
     <div className="p-6 lg:p-8">
@@ -195,14 +183,14 @@ export default function Sources() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-accent-900 mb-1">Platform</label>
+                <label className="block text-sm font-medium text-accent-900 mb-1">Category</label>
                 <select
                   value={formPlatform}
                   onChange={(e) => setFormPlatform(e.target.value)}
                   className="input-base"
                 >
-                  {PLATFORMS.map((p) => (
-                    <option key={p.value} value={p.value}>{p.label}</option>
+                  {SOURCE_CATEGORIES.map((c) => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
                   ))}
                 </select>
               </div>
@@ -527,7 +515,7 @@ function SourceCard({
 
       <div className="flex items-center gap-2 mb-3">
         <span className="text-xs px-2 py-0.5 bg-accent-100 text-accent-700 rounded-full">
-          {source.platform}
+          {CATEGORY_LABELS[source.platform] || source.platform}
         </span>
         <span className="text-xs text-accent-500">
           {source.trend_count} trend{source.trend_count !== 1 ? 's' : ''}

@@ -72,7 +72,14 @@ export default function Dashboard() {
   ]
 
   const categories = ['All', 'Dresses', 'Tops', 'Pants', 'Accessories', 'Footwear', 'Outfits']
-  const platforms = ['All', 'Instagram', 'TikTok', 'SHEIN', 'Fashion Nova', 'Princess Polly', 'Zara', 'H&M', 'Vogue', 'WWD', 'Google Trends']
+  const platforms = ['All', 'ecommerce', 'social', 'media', 'search']
+  const platformLabels: Record<string, string> = {
+    'All': 'All Sources',
+    'ecommerce': 'Ecommerce',
+    'social': 'Social Media',
+    'media': 'Fashion Media',
+    'search': 'Search & Trends',
+  }
 
   return (
     <div className="p-6 lg:p-8">
@@ -160,7 +167,7 @@ export default function Dashboard() {
             >
               {platforms.map((plat) => (
                 <option key={plat} value={plat === 'All' ? '' : plat}>
-                  {plat}
+                  {platformLabels[plat] || plat}
                 </option>
               ))}
             </select>
