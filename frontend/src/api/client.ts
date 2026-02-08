@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 const client: AxiosInstance = axios.create({
   baseURL,
