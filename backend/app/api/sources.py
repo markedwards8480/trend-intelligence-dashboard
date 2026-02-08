@@ -14,6 +14,9 @@ from app.schemas.schemas import (
     SourceBulkCreateRequest,
     SourceBulkResponse,
     SourceBulkImportResult,
+    SocialDiscoveryResponse,
+    BrandSocialDiscovery,
+    SocialAccount,
 )
 from app.services.ai_service import AIService
 
@@ -303,6 +306,67 @@ async def analyze_from_source(
     db.commit()
 
     return trend_item
+
+
+@router.post("/discover-social", response_model=SocialDiscoveryResponse)
+async def discover_social_accounts(
+    db: Session = Depends(get_db),
+):
+    """AI-powered discovery of social media accounts for existing ecommerce brands."""
+    # Get all active ecommerce sources
+    ecommerce = db.query(MonitoringTarget).filter(
+        MonitoringTarget.type == "source",
+        MonitoringTarget.platform == "ecommerce",
+        MonitoringTarget.active == True,
+    ).all()
+
+    if not ecommerce:
+        raise HTTPException(status_code=400, detail="No ecommerce sources found. Add some first.")
+
+    brands = [
+        {"name": s.source_name, "url": s.source_url}
+        for s in ecommerce
+    ]
+
+    results = await AIService.discover_social_accounts(brands)
+
+    # Transform raw AI results into typed response
+    brand_discoveries = []
+    total_accounts = 0
+    total_influencers = 0
+
+    for item in results:
+        accounts = [
+            SocialAccount(**a) for a in item.get("accounts", [])
+        ]
+        influencers = [
+            SocialAccount(
+                platform=inf.get("platform", ""),
+                handle=inf.get("handle", ""),
+                url=inf.get("url", ""),
+                name=inf.get("name", ""),
+                type="influencer",
+                description=inf.get("description", ""),
+                estimated_followers=inf.get("estimated_followers", ""),
+            )
+            for inf in item.get("related_influencers", [])
+        ]
+
+        total_accounts += len(accounts)
+        total_influencers += len(influencers)
+
+        brand_discoveries.append(BrandSocialDiscovery(
+            brand=item.get("brand", ""),
+            accounts=accounts,
+            related_influencers=influencers,
+            hashtags=item.get("hashtags", []),
+        ))
+
+    return SocialDiscoveryResponse(
+        brands=brand_discoveries,
+        total_accounts=total_accounts,
+        total_influencers=total_influencers,
+    )
 
 
 @router.post("/suggestions", response_model=List[SourceSuggestion])

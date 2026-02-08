@@ -336,3 +336,150 @@ Return ONLY valid JSON, no additional text."""
             print(f"Warning: Source suggestion failed: {e}")
             # Return empty list on failure
             return []
+
+    @staticmethod
+    async def discover_social_accounts(
+        ecommerce_brands: List[Dict],
+        batch_size: int = 10,
+    ) -> List[Dict]:
+        """
+        Use AI to discover social media accounts (TikTok, Instagram) for ecommerce brands,
+        plus related influencer accounts and hashtags.
+
+        Args:
+            ecommerce_brands: List of dicts with name, url
+            batch_size: How many brands to process per AI call
+
+        Returns:
+            List of discovered social accounts with brand associations
+        """
+        if settings.USE_MOCK_AI:
+            await asyncio.sleep(0.1)
+            results = []
+            for brand in ecommerce_brands[:5]:
+                name = brand.get("name", "Unknown")
+                handle = name.lower().replace(" ", "").replace("'", "").replace("&", "and")
+                results.append({
+                    "brand": name,
+                    "accounts": [
+                        {
+                            "platform": "tiktok",
+                            "handle": f"@{handle}",
+                            "url": f"https://www.tiktok.com/@{handle}",
+                            "name": f"{name} TikTok",
+                            "type": "official",
+                            "description": f"Official TikTok account for {name}",
+                            "estimated_followers": "500K+",
+                        },
+                        {
+                            "platform": "instagram",
+                            "handle": f"@{handle}",
+                            "url": f"https://www.instagram.com/{handle}/",
+                            "name": f"{name} Instagram",
+                            "type": "official",
+                            "description": f"Official Instagram account for {name}",
+                            "estimated_followers": "1M+",
+                        },
+                    ],
+                    "related_influencers": [
+                        {
+                            "platform": "tiktok",
+                            "handle": "@fashiontrendsetterxo",
+                            "url": "https://www.tiktok.com/@fashiontrendsetterxo",
+                            "name": "Fashion Trendsetter",
+                            "description": f"Frequently features {name} hauls and try-ons",
+                            "estimated_followers": "200K",
+                        },
+                    ],
+                    "hashtags": [f"#{handle}", f"#{handle}haul", f"#{handle}finds"],
+                })
+            return results
+
+        if not settings.CLAUDE_API_KEY:
+            raise ValueError("CLAUDE_API_KEY not configured")
+
+        try:
+            from anthropic import Anthropic
+            import json
+
+            client = Anthropic()
+            all_results = []
+
+            # Process in batches to avoid token limits
+            for i in range(0, len(ecommerce_brands), batch_size):
+                batch = ecommerce_brands[i:i + batch_size]
+                brand_list = "\n".join(
+                    f"- {b.get('name', 'Unknown')} ({b.get('url', '')})"
+                    for b in batch
+                )
+
+                prompt = f"""You are helping a women's fast fashion apparel company (Mark Edwards Apparel) build a social media intelligence database. Their primary market is junior girls (15-25) and young women (25-35).
+
+For each of the following ecommerce fashion brands, provide their social media accounts and related influencer accounts.
+
+Brands:
+{brand_list}
+
+For EACH brand, provide:
+1. Their official TikTok account (handle and URL) — use real, known handles
+2. Their official Instagram account (handle and URL) — use real, known handles
+3. 1-2 related influencer/creator accounts on TikTok or Instagram who frequently feature that brand (hauls, try-ons, styling videos)
+4. 2-3 relevant hashtags used for that brand on social media
+
+IMPORTANT RULES:
+- Use REAL social media handles that actually exist. If you're not sure about a handle, use the most common/likely format.
+- For official accounts, the handle is usually the brand name (e.g., @zara, @shein, @prettylittlething)
+- For influencers, suggest real popular fashion creators who are known to feature these brands
+- Focus on accounts popular with junior girls (15-25) — Gen Z fashion content
+- Include estimated follower counts where known
+
+Return ONLY valid JSON as an array of objects with this structure:
+[
+  {{
+    "brand": "Brand Name",
+    "accounts": [
+      {{
+        "platform": "tiktok" or "instagram",
+        "handle": "@handle",
+        "url": "https://www.tiktok.com/@handle" or "https://www.instagram.com/handle/",
+        "name": "Display Name",
+        "type": "official",
+        "description": "Brief description",
+        "estimated_followers": "1M+" or "500K" etc
+      }}
+    ],
+    "related_influencers": [
+      {{
+        "platform": "tiktok" or "instagram",
+        "handle": "@handle",
+        "url": "full URL",
+        "name": "Creator Name",
+        "description": "Why they're relevant to this brand",
+        "estimated_followers": "200K" etc
+      }}
+    ],
+    "hashtags": ["#brandname", "#brandhaul", "#brandfinds"]
+  }}
+]
+
+Return ONLY valid JSON, no additional text."""
+
+                message = client.messages.create(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=4096,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+
+                response_text = message.content[0].text
+                batch_results = json.loads(response_text)
+                all_results.extend(batch_results)
+
+                # Small delay between batches to avoid rate limiting
+                if i + batch_size < len(ecommerce_brands):
+                    await asyncio.sleep(1)
+
+            return all_results
+
+        except Exception as e:
+            print(f"Warning: Social account discovery failed: {e}")
+            return []

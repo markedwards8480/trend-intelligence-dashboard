@@ -1,5 +1,5 @@
 import client from './client'
-import { Source, SourceCreate, SourceUpdate, SourceSuggestion } from '@/types'
+import { Source, SourceCreate, SourceUpdate, SourceSuggestion, SocialDiscoveryResponse } from '@/types'
 
 export const getSources = async (params?: {
   platform?: string
@@ -38,6 +38,11 @@ export const analyzeFromSource = async (sourceId: number, url: string): Promise<
 
 export const getSuggestions = async (): Promise<SourceSuggestion[]> => {
   const response = await client.post<SourceSuggestion[]>('/sources/suggestions')
+  return response.data
+}
+
+export const discoverSocialAccounts = async (): Promise<SocialDiscoveryResponse> => {
+  const response = await client.post<SocialDiscoveryResponse>('/sources/discover-social')
   return response.data
 }
 

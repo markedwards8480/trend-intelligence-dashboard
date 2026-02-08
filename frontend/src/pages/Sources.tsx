@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Globe, Plus, Trash2, ExternalLink, Sparkles, ChevronDown, ChevronUp, Power, Search, Upload } from 'lucide-react'
+import { Globe, Plus, Trash2, ExternalLink, Sparkles, ChevronDown, ChevronUp, Power, Search, Upload, Instagram } from 'lucide-react'
 import { useSources, useSourceSuggestions } from '@/hooks/useSources'
 import { DEMOGRAPHICS, DEMOGRAPHIC_LABELS, Demographic, SourceCreate, SourceSuggestion } from '@/types'
 import { analyzeFromSource } from '@/api/sources'
 import ExcelImportModal from '@/components/ExcelImportModal'
+import SocialDiscoveryModal from '@/components/SocialDiscoveryModal'
 
 // Source categories — user picks the type, brand name comes from the Source Name field
 const SOURCE_CATEGORIES = [
@@ -44,6 +45,9 @@ export default function Sources() {
 
   // Import modal
   const [showImportModal, setShowImportModal] = useState(false)
+
+  // Social discovery modal
+  const [showSocialDiscovery, setShowSocialDiscovery] = useState(false)
 
   // Suggestions visibility
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -144,6 +148,13 @@ export default function Sources() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowSocialDiscovery(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 transition-all shadow-sm"
+          >
+            <Instagram className="w-5 h-5" />
+            Discover Social
+          </button>
           <button
             onClick={() => setShowImportModal(true)}
             className="btn-secondary flex items-center gap-2"
@@ -490,6 +501,16 @@ export default function Sources() {
         onClose={() => setShowImportModal(false)}
         onSuccess={() => {
           setShowImportModal(false)
+          refetch()
+        }}
+      />
+
+      {/* Social Media Discovery Modal */}
+      <SocialDiscoveryModal
+        isOpen={showSocialDiscovery}
+        onClose={() => setShowSocialDiscovery(false)}
+        onSuccess={() => {
+          setShowSocialDiscovery(false)
           refetch()
         }}
       />

@@ -308,3 +308,31 @@ class SourceBulkResponse(BaseModel):
     """Response for bulk import."""
     succeeded: int
     failed: List[SourceBulkImportResult]
+
+
+# ============ Social Media Discovery Schemas ============
+
+class SocialAccount(BaseModel):
+    """A discovered social media account."""
+    platform: str
+    handle: str
+    url: str
+    name: str
+    type: str = "official"  # official, influencer
+    description: str = ""
+    estimated_followers: str = ""
+
+
+class BrandSocialDiscovery(BaseModel):
+    """Social media discovery results for a single brand."""
+    brand: str
+    accounts: List[SocialAccount] = []
+    related_influencers: List[SocialAccount] = []
+    hashtags: List[str] = []
+
+
+class SocialDiscoveryResponse(BaseModel):
+    """Full response for social media discovery."""
+    brands: List[BrandSocialDiscovery]
+    total_accounts: int
+    total_influencers: int

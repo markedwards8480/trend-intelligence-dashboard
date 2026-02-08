@@ -92,6 +92,31 @@ export interface SourceSuggestion {
   demographics: string[]
 }
 
+// ============ Social Media Discovery ============
+
+export interface SocialAccount {
+  platform: string
+  handle: string
+  url: string
+  name: string
+  type: string
+  description: string
+  estimated_followers: string
+}
+
+export interface BrandSocialDiscovery {
+  brand: string
+  accounts: SocialAccount[]
+  related_influencers: SocialAccount[]
+  hashtags: string[]
+}
+
+export interface SocialDiscoveryResponse {
+  brands: BrandSocialDiscovery[]
+  total_accounts: number
+  total_influencers: number
+}
+
 // ============ Mood Boards ============
 
 export interface MoodBoard {
