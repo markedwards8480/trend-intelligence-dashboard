@@ -172,7 +172,7 @@ class AIService:
         try:
             from anthropic import Anthropic
 
-            client = Anthropic()
+            client = Anthropic(api_key=settings.CLAUDE_API_KEY)
 
             prompt = f"""Analyze this fashion trend item from {source_platform}.
 
@@ -287,7 +287,7 @@ Return ONLY valid JSON, no additional text."""
         try:
             from anthropic import Anthropic
 
-            client = Anthropic()
+            client = Anthropic(api_key=settings.CLAUDE_API_KEY)
 
             source_list = "\n".join(
                 f"- {s.get('name', 'Unknown')} ({s.get('url', '')})" for s in existing_sources
@@ -402,7 +402,7 @@ Return ONLY valid JSON, no additional text."""
             from anthropic import Anthropic
             import json
 
-            client = Anthropic()
+            client = Anthropic(api_key=settings.CLAUDE_API_KEY)
             all_results = []
 
             # Process in batches to avoid token limits
@@ -481,5 +481,7 @@ Return ONLY valid JSON, no additional text."""
             return all_results
 
         except Exception as e:
+            import traceback
             print(f"Warning: Social account discovery failed: {e}")
+            traceback.print_exc()
             return []
