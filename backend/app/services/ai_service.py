@@ -194,7 +194,7 @@ Please provide a detailed analysis in JSON format with the following fields:
 Return ONLY valid JSON, no additional text."""
 
             message = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-4-5-20250929",
                 max_tokens=1024,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -322,7 +322,7 @@ Return ONLY valid JSON as an array of objects, each with:
 Return ONLY valid JSON, no additional text."""
 
             message = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-4-5-20250929",
                 max_tokens=1024,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -465,7 +465,7 @@ Return ONLY valid JSON as an array of objects with this structure:
 Return ONLY valid JSON, no additional text."""
 
                 message = client.messages.create(
-                    model="claude-3-5-sonnet-20241022",
+                    model="claude-sonnet-4-5-20250929",
                     max_tokens=4096,
                     messages=[{"role": "user", "content": prompt}],
                 )
