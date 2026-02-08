@@ -392,87 +392,118 @@ async def seed_status():
 
 @router.post("/backfill-images")
 async def backfill_images(
+    force: bool = Query(False, description="Re-assign images even if one exists"),
     db: Session = Depends(get_db),
 ):
     """
-    Assign curated fashion stock images to all trends without images.
-    Uses high-quality Unsplash fashion photos organized by category.
+    Assign category-accurate fashion images to trends.
+    All photo IDs sourced directly from Unsplash search results.
+    Pass ?force=true to re-assign ALL trends (not just empty ones).
     """
-    import random
-    import hashlib
+    P = "https://images.unsplash.com/photo-"
+    S = "?w=400&h=500&fit=crop"
 
-    # Curated fashion image URLs from Unsplash, organized by category keyword
+    # Verified Unsplash photo IDs scraped from category-specific search pages
     FASHION_IMAGES = {
         "dress": [
-            "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1539008168-7b6a5a1149e8?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1612336307429-8a898d10e223?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1566174053879-31528523f8ae?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1583496661160-fb5886a0aaaa?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1585487000160-6ebcfceb0d44?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1518622358385-8ea7d0794bf6?w=400&h=500&fit=crop",
+            f"{P}1752797203245-3b9e233b2ac8{S}",
+            f"{P}1753589435506-cfd036fba85e{S}",
+            f"{P}1667890786022-98704b9b8fcb{S}",
+            f"{P}1663044023283-9ea59358b6c0{S}",
+            f"{P}1663044022894-68a5e6bccd64{S}",
+            f"{P}1667890786333-ddb32e7e0d6e{S}",
+            f"{P}1663044022903-caa195cb5b2e{S}",
+            f"{P}1752797161382-3d0a4edc51dc{S}",
+            f"{P}1730141100734-90e06e5966dd{S}",
+            f"{P}1730140762303-8bc833a0c0bb{S}",
         ],
         "top": [
-            "https://images.unsplash.com/photo-1434389677669-e08b4cda3a67?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1564859228273-274232fdb516?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1485462537746-965f33f7f6a7?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1525507119028-ed4c629a60a3?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1558171813-4c088753af8f?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=400&h=500&fit=crop",
+            f"{P}1724490056260-44bf1de2617e{S}",
+            f"{P}1651507178496-7a42c1e19442{S}",
+            f"{P}1618371360326-3583fcdb0b10{S}",
+            f"{P}1760551600855-cbd4fd31d278{S}",
+            f"{P}1574847872646-abff244bbd87{S}",
+            f"{P}1763935723482-14ac7f49a3ae{S}",
+            f"{P}1689700672469-0017bfeec930{S}",
+            f"{P}1663044022913-8913ff9ff2bc{S}",
+            f"{P}1766465525646-f4b47c41f061{S}",
+            f"{P}1673999707565-8bb553c9765b{S}",
         ],
         "pants": [
-            "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1604176354204-9268737828e4?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1542272604-787c3835535d?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1582418702059-97ebafb35d09?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1475178626620-a4d074967f8c?w=400&h=500&fit=crop",
+            f"{P}1695231081377-2765f838043d{S}",
+            f"{P}1770364018048-45c991a6c4d2{S}",
+            f"{P}1770364018544-7ac645977a79{S}",
+            f"{P}1758543144593-95061a3f418a{S}",
+            f"{P}1762343290221-d2374e1e2e2c{S}",
+            f"{P}1770294760762-1cd821ecc567{S}",
+            f"{P}1770364020139-8feb0e4d41cf{S}",
+            f"{P}1765828594000-1605dd96033e{S}",
+            f"{P}1759851235367-2eb2282414fa{S}",
+            f"{P}1762327162259-60c4e56b8523{S}",
         ],
-        "accessories": [
-            "https://images.unsplash.com/photo-1611085583191-a3b181a88401?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1608042314453-ae338d80c427?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1523206489230-c012c64b2b48?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1576053139778-7e32f2ae3d0d?w=400&h=500&fit=crop",
+        "skirt": [
+            f"{P}1608033247410-817c68700611{S}",
+            f"{P}1582142306909-195724d33ffc{S}",
+            f"{P}1570700006701-4bdeaf669738{S}",
+            f"{P}1741943716275-2eaf11f4e918{S}",
+            f"{P}1739945533087-1f80850e7d86{S}",
+            f"{P}1739945472394-3284ac02996b{S}",
+            f"{P}1555180739-0cb3b1d85138{S}",
+            f"{P}1633452696817-bae37e248741{S}",
+            f"{P}1691315926449-53b463adc4ac{S}",
+            f"{P}1544596758-7339ae9a0432{S}",
         ],
-        "footwear": [
-            "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1549298916-b41d501d3772?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1460353581641-37baddab0fa2?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=400&h=500&fit=crop",
+        "leggings": [
+            f"{P}1603920346280-75b4832fb6a7{S}",
+            f"{P}1597299001669-6454fec8ac25{S}",
+            f"{P}1762331652034-2db35c56350e{S}",
+            f"{P}1762331648554-94fdae0956da{S}",
+            f"{P}1763771522867-c26bf75f12bc{S}",
+            f"{P}1762331654306-49a7e79763c5{S}",
+            f"{P}1762331660576-cbf66a7db84d{S}",
+            f"{P}1762337380547-efe2df510d98{S}",
+            f"{P}1611078844630-85c0a9a34623{S}",
+            f"{P}1762337383598-96edda3d55f7{S}",
         ],
         "outerwear": [
-            "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1544022613-e87ca75a784a?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1548624313-0396c75e4b1a?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1551488831-00ddcb6c6bd3?w=400&h=500&fit=crop",
+            f"{P}1706765779494-2705542ebe74{S}",
+            f"{P}1608113562252-b320e7628e17{S}",
+            f"{P}1548624313-0396c75e4b1a{S}",
+            f"{P}1614079290101-0c2181ac8ea3{S}",
+            f"{P}1614031679232-0dae776a72ee{S}",
+            f"{P}1711527088900-f7ebabda4e3f{S}",
+            f"{P}1611025504703-8c143abe6996{S}",
+            f"{P}1552327359-d86398116072{S}",
+            f"{P}1677123718817-5a203404d638{S}",
+            f"{P}1668934804959-2cc138045bfb{S}",
         ],
-        "outfit": [
-            "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1485968579580-b6d095142e6e?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1487222477894-8943e31ef7b2?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=400&h=500&fit=crop",
+        "footwear": [
+            f"{P}1760302318631-a8d342cd4951{S}",
+            f"{P}1695459468644-717c8ae17eed{S}",
+            f"{P}1768225286074-9039931bb9d3{S}",
+            f"{P}1618153478389-b2ed8de18ed3{S}",
+            f"{P}1636705941762-ae56d531a7d7{S}",
+            f"{P}1597081206405-5a13f38c5f71{S}",
+            f"{P}1759542890353-35f5568c1c90{S}",
+            f"{P}1650320079970-b4ee8f0dae33{S}",
+            f"{P}1560857792-215f9e3534ed{S}",
+            f"{P}1598808696311-66be744a23c4{S}",
         ],
         "general": [
-            "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1445205170230-053b83016050?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1558171813-4c088753af8f?w=400&h=500&fit=crop",
-            "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=400&h=500&fit=crop",
+            f"{P}1739773375456-79be292cedb1{S}",
+            f"{P}1739773375426-880a10bea9a9{S}",
+            f"{P}1731577506253-0fd9cd00ab7f{S}",
+            f"{P}1735553816867-88cd8496df58{S}",
+            f"{P}1735553816725-76d4fa5a374e{S}",
+            f"{P}1735553816746-229df9b3bd37{S}",
+            f"{P}1735553816769-7d30e5b1a19a{S}",
+            f"{P}1735553816645-8441289f6db7{S}",
+            f"{P}1735553816887-95a2657d5fd8{S}",
+            f"{P}1735553816655-1d4cab9fb64c{S}",
         ],
     }
 
-    # Map specific categories to image groups
+    # Map specific product categories to image groups
     CATEGORY_MAP = {
         "midi dress": "dress", "mini dress": "dress", "slip dress": "dress",
         "maxi dress": "dress", "shirt dress": "dress", "wrap dress": "dress",
@@ -480,27 +511,34 @@ async def backfill_images(
         "crop top": "top", "tank top": "top", "blouse": "top",
         "t-shirt": "top", "cami top": "top", "corset top": "top",
         "hoodie": "top", "sweater": "top", "cardigan": "top", "top": "top",
-        "cargo pants": "pants", "wide leg jeans": "pants", "leggings": "pants",
-        "mini skirt": "pants", "skirt": "pants", "shorts": "pants",
+        "cargo pants": "pants", "wide leg jeans": "pants",
         "wide leg pants": "pants", "jeans": "pants", "trousers": "pants",
-        "joggers": "pants", "pants": "pants",
-        "platform sneakers": "footwear", "boots": "footwear", "heels": "footwear",
+        "joggers": "pants", "shorts": "pants", "pants": "pants",
+        "leggings": "leggings",
+        "mini skirt": "skirt", "skirt": "skirt", "midi skirt": "skirt",
+        "pleated skirt": "skirt",
+        "platform sneakers": "footwear", "platform boots": "footwear",
+        "boots": "footwear", "heels": "footwear",
         "sandals": "footwear", "sneakers": "footwear", "mules": "footwear",
         "loafers": "footwear", "footwear": "footwear",
         "oversized blazer": "outerwear", "puffer jacket": "outerwear",
         "trench coat": "outerwear", "denim jacket": "outerwear",
         "leather jacket": "outerwear", "coat": "outerwear", "jacket": "outerwear",
-        "bag": "accessories", "sunglasses": "accessories", "jewelry": "accessories",
-        "hat": "accessories", "belt": "accessories", "scarf": "accessories",
-        "hair accessories": "accessories", "accessories": "accessories",
-        "matching set": "outfit", "co-ord set": "outfit", "romper": "outfit",
-        "jumpsuit": "outfit", "outfit": "outfit", "set": "outfit",
+        "blazer": "outerwear",
+        "bag": "general", "sunglasses": "general", "jewelry": "general",
+        "hat": "general", "belt": "general", "scarf": "general",
+        "hair accessories": "general", "accessories": "general",
+        "matching set": "general", "co-ord set": "general", "romper": "dress",
+        "jumpsuit": "dress", "bodysuit": "top",
     }
 
-    trends = db.query(TrendItem).filter(
-        (TrendItem.image_url == None) | (TrendItem.image_url == ""),
-        TrendItem.status == "active",
-    ).all()
+    if force:
+        trends = db.query(TrendItem).filter(TrendItem.status == "active").all()
+    else:
+        trends = db.query(TrendItem).filter(
+            (TrendItem.image_url == None) | (TrendItem.image_url == ""),
+            TrendItem.status == "active",
+        ).all()
 
     if not trends:
         return {"updated": 0, "message": "All trends already have images"}
@@ -508,10 +546,8 @@ async def backfill_images(
     updated = 0
     for trend in trends:
         cat = (trend.category or "").lower().strip()
-        # Find the image group for this category
         img_group = CATEGORY_MAP.get(cat, "general")
         images = FASHION_IMAGES.get(img_group, FASHION_IMAGES["general"])
-        # Use trend ID as seed for consistent, unique assignment
         idx = trend.id % len(images)
         trend.image_url = images[idx]
         updated += 1
