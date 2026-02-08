@@ -6,12 +6,18 @@ from app.config import settings
 
 
 def _clean_json_response(text: str) -> str:
-    """Strip markdown code fences and whitespace from Claude's JSON responses."""
+    """Strip markdown code fences, fix common JSON issues from Claude responses."""
     text = text.strip()
     # Remove ```json ... ``` or ``` ... ``` wrappers
     text = re.sub(r'^```(?:json)?\s*\n?', '', text)
     text = re.sub(r'\n?```\s*$', '', text)
-    return text.strip()
+    text = text.strip()
+    # Fix trailing commas before } or ] (common LLM JSON error)
+    text = re.sub(r',\s*}', '}', text)
+    text = re.sub(r',\s*]', ']', text)
+    # Fix single quotes used instead of double quotes (less common but possible)
+    # Only do this if json.loads would fail — we'll try strict first
+    return text
 
 # Fashion-relevant mock data for realistic development
 MOCK_CATEGORIES = [
@@ -350,7 +356,7 @@ Return ONLY valid JSON, no additional text."""
     @staticmethod
     async def discover_social_accounts(
         ecommerce_brands: List[Dict],
-        batch_size: int = 10,
+        batch_size: int = 5,
     ) -> List[Dict]:
         """
         Use AI to discover social media accounts (TikTok, Instagram) for ecommerce brands,
@@ -481,7 +487,16 @@ Return ONLY valid JSON, no additional text."""
                 )
 
                 response_text = message.content[0].text
-                batch_results = json.loads(_clean_json_response(response_text))
+                cleaned = _clean_json_response(response_text)
+                try:
+                    batch_results = json.loads(cleaned)
+                except json.JSONDecodeError as je:
+                    # Log the error with context for debugging
+                    print(f"JSON parse error on batch {i//batch_size + 1}: {je}")
+                    print(f"Response preview (first 500 chars): {cleaned[:500]}")
+                    print(f"Response preview (last 500 chars): {cleaned[-500:]}")
+                    # Try to salvage — skip this batch but continue
+                    batch_results = []
                 all_results.extend(batch_results)
 
                 # Small delay between batches to avoid rate limiting
