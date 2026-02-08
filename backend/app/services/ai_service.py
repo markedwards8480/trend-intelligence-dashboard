@@ -1,7 +1,17 @@
 import random
 import asyncio
+import re
 from typing import Dict, List, Optional
 from app.config import settings
+
+
+def _clean_json_response(text: str) -> str:
+    """Strip markdown code fences and whitespace from Claude's JSON responses."""
+    text = text.strip()
+    # Remove ```json ... ``` or ``` ... ``` wrappers
+    text = re.sub(r'^```(?:json)?\s*\n?', '', text)
+    text = re.sub(r'\n?```\s*$', '', text)
+    return text.strip()
 
 # Fashion-relevant mock data for realistic development
 MOCK_CATEGORIES = [
@@ -203,7 +213,7 @@ Return ONLY valid JSON, no additional text."""
             response_text = message.content[0].text
             import json
 
-            analysis = json.loads(response_text)
+            analysis = json.loads(_clean_json_response(response_text))
             return analysis
 
         except Exception as e:
@@ -329,7 +339,7 @@ Return ONLY valid JSON, no additional text."""
 
             import json
             response_text = message.content[0].text
-            suggestions = json.loads(response_text)
+            suggestions = json.loads(_clean_json_response(response_text))
             return suggestions
 
         except Exception as e:
@@ -471,7 +481,7 @@ Return ONLY valid JSON, no additional text."""
                 )
 
                 response_text = message.content[0].text
-                batch_results = json.loads(response_text)
+                batch_results = json.loads(_clean_json_response(response_text))
                 all_results.extend(batch_results)
 
                 # Small delay between batches to avoid rate limiting
