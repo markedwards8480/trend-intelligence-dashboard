@@ -1,7 +1,6 @@
-import asyncio
 import threading
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, and_
 from datetime import datetime, timedelta
@@ -162,7 +161,13 @@ async def get_daily_trends(
 
 def _run_seed_in_background(brands: list):
     """Background worker: generates seed trends and saves to DB.
-    Runs in a separate thread with its own DB session and event loop."""
+    Runs in a separate thread — fully synchronous, no asyncio."""
+    import json
+    import re
+    import time
+    import traceback
+    from app.config import settings
+
     global _seed_status
     _seed_status["running"] = True
     _seed_status["done"] = False
@@ -173,24 +178,109 @@ def _run_seed_in_background(brands: list):
     _seed_status["brands_processed"] = 0
     _seed_status["progress"] = "Starting AI generation..."
 
+    def _clean(text):
+        text = text.strip()
+        text = re.sub(r'^```(?:json)?\s*\n?', '', text)
+        text = re.sub(r'\n?```\s*$', '', text)
+        text = text.strip()
+        text = re.sub(r',\s*}', '}', text)
+        text = re.sub(r',\s*]', ']', text)
+        return text
+
+    all_results = []
+    batch_size = 5
+    trends_per_brand = 5
+
     try:
-        # Create a new event loop for this thread
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        results = loop.run_until_complete(AIService.generate_seed_trends(brands))
-        loop.close()
+        from anthropic import Anthropic
+        client = Anthropic(api_key=settings.CLAUDE_API_KEY)
+
+        for i in range(0, len(brands), batch_size):
+            batch = brands[i:i + batch_size]
+            batch_num = i // batch_size + 1
+            total_batches = (len(brands) + batch_size - 1) // batch_size
+            _seed_status["progress"] = f"Processing batch {batch_num}/{total_batches} ({', '.join(b.get('name','') for b in batch)})..."
+
+            brand_list = "\n".join(
+                f"- {b.get('name', 'Unknown')} ({b.get('url', '')})"
+                for b in batch
+            )
+
+            prompt = f"""You are helping a women's fast fashion apparel company (Mark Edwards Apparel) populate their trend intelligence dashboard with realistic trending products from competitor brands.
+
+For each brand below, generate {trends_per_brand} REALISTIC trending products that this brand would currently stock in early 2026. Use your knowledge of each brand's actual product range, price point, and target demographic.
+
+Brands:
+{brand_list}
+
+For EACH product, provide:
+- brand: The brand name (must match exactly)
+- product_name: A realistic product name as it would appear on their site
+- product_url: A realistic URL for this product on their site (use real URL patterns like /products/, /p/, /dp/)
+- category: Fashion category (e.g., "midi dress", "crop top", "cargo pants", "mini skirt", "oversized blazer", "platform sneakers", "slip dress", "wide leg jeans", "tank top", "maxi dress")
+- colors: Array of 1-3 colors (e.g., ["black", "cream"], ["sage green"])
+- patterns: Array of patterns (e.g., ["solid"], ["floral", "ditsy"], ["plaid"])
+- style_tags: Array of 2-4 style tags (e.g., ["y2k", "streetwear"], ["clean girl", "minimal"], ["cottagecore", "romantic"])
+- fabrications: Array of materials (e.g., ["cotton"], ["polyester", "spandex"], ["denim"])
+- price_point: "budget" | "mid" | "luxury"
+- demographic: "junior_girls" | "young_women" | "contemporary"
+- narrative: 1-2 sentence explanation of why this product is trending
+- estimated_likes: Realistic number between 500-50000
+- estimated_comments: Realistic number between 50-5000
+- estimated_shares: Realistic number between 20-2000
+- estimated_views: Realistic number between 5000-500000
+
+IMPORTANT: Make products realistic for each brand's actual style and price range. Use real fashion categories and current 2026 trend language.
+
+Return ONLY valid JSON as a flat array of product objects. Do NOT nest by brand — return one flat array.
+Return ONLY valid JSON, no additional text."""
+
+            try:
+                message = client.messages.create(
+                    model="claude-sonnet-4-5-20250929",
+                    max_tokens=8192,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+
+                response_text = message.content[0].text
+                cleaned = _clean(response_text)
+                batch_results = json.loads(cleaned)
+
+                # Attach source_id from our brand list
+                brand_id_map = {b.get('name', ''): b.get('id') for b in batch}
+                for item in batch_results:
+                    brand_name = item.get('brand', '')
+                    item['source_id'] = brand_id_map.get(brand_name)
+                all_results.extend(batch_results)
+
+                _seed_status["brands_processed"] = min(i + batch_size, len(brands))
+                _seed_status["progress"] = f"Batch {batch_num}/{total_batches} done — {len(all_results)} products so far"
+
+            except json.JSONDecodeError as je:
+                print(f"JSON parse error on seed batch {batch_num}: {je}")
+                _seed_status["progress"] = f"Batch {batch_num} had JSON error, continuing..."
+            except Exception as e:
+                print(f"Error on seed batch {batch_num}: {e}")
+                traceback.print_exc()
+                _seed_status["progress"] = f"Batch {batch_num} error: {str(e)[:100]}, continuing..."
+
+            # Small delay between batches
+            if i + batch_size < len(brands):
+                time.sleep(1)
+
     except Exception as e:
         _seed_status["progress"] = f"AI generation failed: {str(e)}"
         _seed_status["running"] = False
         _seed_status["done"] = True
+        traceback.print_exc()
         return
 
-    _seed_status["progress"] = f"Saving {len(results)} trends to database..."
+    _seed_status["progress"] = f"Saving {len(all_results)} trends to database..."
 
     # Use our own DB session (not request-scoped)
     db = SessionLocal()
     try:
-        for item in results:
+        for item in all_results:
             try:
                 product_url = item.get("product_url", "")
                 if not product_url:
