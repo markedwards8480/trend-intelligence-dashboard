@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Globe, Plus, Trash2, ExternalLink, Sparkles, ChevronDown, ChevronUp, Power, Search } from 'lucide-react'
+import { Globe, Plus, Trash2, ExternalLink, Sparkles, ChevronDown, ChevronUp, Power, Search, Upload } from 'lucide-react'
 import { useSources, useSourceSuggestions } from '@/hooks/useSources'
 import { DEMOGRAPHICS, DEMOGRAPHIC_LABELS, Demographic, SourceCreate, SourceSuggestion } from '@/types'
 import { analyzeFromSource } from '@/api/sources'
+import ExcelImportModal from '@/components/ExcelImportModal'
 
 // Source categories — user picks the type, brand name comes from the Source Name field
 const SOURCE_CATEGORIES = [
@@ -40,6 +41,9 @@ export default function Sources() {
   const [analyzeUrl, setAnalyzeUrl] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzeResult, setAnalyzeResult] = useState<string | null>(null)
+
+  // Import modal
+  const [showImportModal, setShowImportModal] = useState(false)
 
   // Suggestions visibility
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -139,13 +143,22 @@ export default function Sources() {
             Manage the sites and accounts you monitor for fashion trends
           </p>
         </div>
-        <button
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus className="w-5 h-5" />
-          Add Source
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="btn-secondary flex items-center gap-2"
+          >
+            <Upload className="w-5 h-5" />
+            Import Excel
+          </button>
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus className="w-5 h-5" />
+            Add Source
+          </button>
+        </div>
       </div>
 
       {/* Analysis result toast */}
@@ -470,6 +483,16 @@ export default function Sources() {
           </div>
         )}
       </div>
+
+      {/* Excel Import Modal */}
+      <ExcelImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onSuccess={() => {
+          setShowImportModal(false)
+          refetch()
+        }}
+      />
     </div>
   )
 }

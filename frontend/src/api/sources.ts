@@ -40,3 +40,13 @@ export const getSuggestions = async (): Promise<SourceSuggestion[]> => {
   const response = await client.post<SourceSuggestion[]>('/sources/suggestions')
   return response.data
 }
+
+export const createSourcesBulk = async (
+  sources: SourceCreate[]
+): Promise<{
+  succeeded: number
+  failed: Array<{ name: string; url: string; reason: string }>
+}> => {
+  const response = await client.post('/sources/bulk', { sources })
+  return response.data
+}

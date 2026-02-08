@@ -288,3 +288,23 @@ class SourceSuggestion(BaseModel):
     name: str
     reasoning: str
     demographics: List[str] = []
+
+
+# ============ Bulk Import Schemas ============
+
+class SourceBulkCreateRequest(BaseModel):
+    """Request for bulk importing sources."""
+    sources: List[SourceCreate]
+
+
+class SourceBulkImportResult(BaseModel):
+    """Result detail for a failed bulk import row."""
+    name: str
+    url: str
+    reason: str
+
+
+class SourceBulkResponse(BaseModel):
+    """Response for bulk import."""
+    succeeded: int
+    failed: List[SourceBulkImportResult]

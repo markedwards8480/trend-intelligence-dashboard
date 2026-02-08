@@ -11,6 +11,9 @@ from app.schemas.schemas import (
     SourceResponse,
     SourceUpdate,
     SourceSuggestion,
+    SourceBulkCreateRequest,
+    SourceBulkResponse,
+    SourceBulkImportResult,
 )
 from app.services.ai_service import AIService
 
@@ -98,6 +101,68 @@ async def list_sources(
         results.append(_to_source_response(t))
 
     return results
+
+
+@router.post("/bulk", response_model=SourceBulkResponse)
+async def bulk_import_sources(
+    request: SourceBulkCreateRequest,
+    db: Session = Depends(get_db),
+):
+    """Bulk import sources from a list. Skips duplicates gracefully."""
+    succeeded = 0
+    failed = []
+
+    for source in request.sources:
+        try:
+            # Check for duplicate
+            existing = db.query(MonitoringTarget).filter(
+                MonitoringTarget.type == "source",
+                MonitoringTarget.source_url == source.url,
+            ).first()
+
+            if existing:
+                failed.append(SourceBulkImportResult(
+                    name=source.name,
+                    url=source.url,
+                    reason="Source already exists",
+                ))
+                continue
+
+            # Validate URL format
+            if not source.url.startswith(('http://', 'https://')):
+                failed.append(SourceBulkImportResult(
+                    name=source.name,
+                    url=source.url,
+                    reason="Invalid URL format (must start with http:// or https://)",
+                ))
+                continue
+
+            # Create source
+            target = MonitoringTarget(
+                type="source",
+                value=source.name,
+                platform=source.platform,
+                active=True,
+                added_by="Mark Edwards",
+                source_url=source.url,
+                source_name=source.name,
+                target_demographics=source.target_demographics,
+                frequency=source.frequency,
+                trend_count=0,
+            )
+            db.add(target)
+            db.commit()
+            succeeded += 1
+
+        except Exception as e:
+            db.rollback()
+            failed.append(SourceBulkImportResult(
+                name=source.name,
+                url=source.url,
+                reason=str(e)[:100],
+            ))
+
+    return SourceBulkResponse(succeeded=succeeded, failed=failed)
 
 
 @router.get("/{source_id}", response_model=SourceResponse)
