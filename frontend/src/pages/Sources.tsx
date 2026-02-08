@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Globe, Plus, Trash2, ExternalLink, Sparkles, ChevronDown, ChevronUp, Power, Search, Upload, Instagram, Zap } from 'lucide-react'
 import { useSources, useSourceSuggestions } from '@/hooks/useSources'
 import { DEMOGRAPHICS, DEMOGRAPHIC_LABELS, Demographic, SourceCreate, SourceSuggestion } from '@/types'
 import { analyzeFromSource } from '@/api/sources'
-import { seedTrendsFromSources } from '@/api/trends'
+import { startSeedGeneration, getSeedStatus } from '@/api/trends'
 import ExcelImportModal from '@/components/ExcelImportModal'
 import SocialDiscoveryModal from '@/components/SocialDiscoveryModal'
 
@@ -52,20 +52,52 @@ export default function Sources() {
 
   // Seed trends state
   const [seeding, setSeeding] = useState(false)
+  const [seedProgress, setSeedProgress] = useState('')
   const [seedResult, setSeedResult] = useState<{ created: number; skipped: number; errors: number } | null>(null)
   const [seedError, setSeedError] = useState('')
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Check seed status on mount (in case generation is already running)
+  useEffect(() => {
+    getSeedStatus().then(status => {
+      if (status.running) {
+        setSeeding(true)
+        setSeedProgress(status.progress)
+        startPolling()
+      } else if (status.done && status.created > 0) {
+        setSeedResult({ created: status.created, skipped: status.skipped, errors: status.errors })
+      }
+    }).catch(() => {})
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [])
+
+  const startPolling = () => {
+    if (pollRef.current) clearInterval(pollRef.current)
+    pollRef.current = setInterval(async () => {
+      try {
+        const status = await getSeedStatus()
+        setSeedProgress(status.progress)
+        if (!status.running && status.done) {
+          setSeeding(false)
+          setSeedResult({ created: status.created, skipped: status.skipped, errors: status.errors })
+          if (pollRef.current) clearInterval(pollRef.current)
+        }
+      } catch {
+        // keep polling
+      }
+    }, 3000)
+  }
 
   const handleSeedTrends = async () => {
-    if (!confirm('Generate ~200 AI trend items from your ecommerce brands? This may take 2-3 minutes.')) return
     setSeeding(true)
     setSeedError('')
     setSeedResult(null)
+    setSeedProgress('Starting...')
     try {
-      const result = await seedTrendsFromSources()
-      setSeedResult(result)
+      await startSeedGeneration()
+      startPolling()
     } catch (err: any) {
       setSeedError(err.response?.data?.detail || err.message || 'Seed generation failed')
-    } finally {
       setSeeding(false)
     }
   }
@@ -306,16 +338,17 @@ export default function Sources() {
             <div className="animate-spin w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full" />
             <div>
               <p className="font-medium">Generating trend data from your ecommerce brands...</p>
-              <p className="text-sm">AI is analyzing 40 brands and creating ~200 trending products. This takes 2-3 minutes.</p>
+              <p className="text-sm">{seedProgress || 'AI is analyzing brands and creating trending products. This takes 2-3 minutes.'}</p>
             </div>
           </div>
         </div>
       )}
-      {seedResult && (
+      {seedResult && !seeding && (
         <div className="mb-6 p-4 rounded-xl bg-green-50 border border-green-200 text-green-800">
           <p className="font-medium">
             {seedResult.created} trends created from {sources.filter(s => s.platform === 'ecommerce').length} brands!
             {seedResult.skipped > 0 && ` (${seedResult.skipped} duplicates skipped)`}
+            {seedResult.errors > 0 && ` (${seedResult.errors} errors)`}
           </p>
           <a href="/" className="text-sm underline hover:text-green-900">View Dashboard →</a>
         </div>

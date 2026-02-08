@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+import asyncio
+import threading
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, and_
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from app.models.database import get_db
+from app.models.database import get_db, SessionLocal
 from app.models.models import TrendItem, TrendMetricsHistory
 from app.schemas.schemas import (
     TrendItemCreate,
@@ -18,6 +21,18 @@ from app.services.ai_service import AIService
 from app.services.scoring_service import ScoringService
 
 router = APIRouter(prefix="/api/trends", tags=["trends"])
+
+# In-memory seed job status tracker
+_seed_status = {
+    "running": False,
+    "progress": "",
+    "created": 0,
+    "skipped": 0,
+    "errors": 0,
+    "total_brands": 0,
+    "brands_processed": 0,
+    "done": False,
+}
 
 
 @router.post("/submit", response_model=TrendItemResponse)
@@ -145,14 +160,115 @@ async def get_daily_trends(
     )
 
 
-@router.post("/seed", response_model=SeedGenerationResponse)
+def _run_seed_in_background(brands: list):
+    """Background worker: generates seed trends and saves to DB.
+    Runs in a separate thread with its own DB session and event loop."""
+    global _seed_status
+    _seed_status["running"] = True
+    _seed_status["done"] = False
+    _seed_status["created"] = 0
+    _seed_status["skipped"] = 0
+    _seed_status["errors"] = 0
+    _seed_status["total_brands"] = len(brands)
+    _seed_status["brands_processed"] = 0
+    _seed_status["progress"] = "Starting AI generation..."
+
+    try:
+        # Create a new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        results = loop.run_until_complete(AIService.generate_seed_trends(brands))
+        loop.close()
+    except Exception as e:
+        _seed_status["progress"] = f"AI generation failed: {str(e)}"
+        _seed_status["running"] = False
+        _seed_status["done"] = True
+        return
+
+    _seed_status["progress"] = f"Saving {len(results)} trends to database..."
+
+    # Use our own DB session (not request-scoped)
+    db = SessionLocal()
+    try:
+        for item in results:
+            try:
+                product_url = item.get("product_url", "")
+                if not product_url:
+                    _seed_status["errors"] += 1
+                    continue
+
+                existing = db.query(TrendItem).filter(TrendItem.url == product_url).first()
+                if existing:
+                    _seed_status["skipped"] += 1
+                    continue
+
+                trend = TrendItem(
+                    url=product_url,
+                    source_platform="ecommerce",
+                    submitted_by="AI Seed Generator",
+                    image_url=None,
+                    source_id=item.get("source_id"),
+                    category=item.get("category"),
+                    subcategory=None,
+                    colors=item.get("colors", []),
+                    patterns=item.get("patterns", []),
+                    style_tags=item.get("style_tags", []),
+                    fabrications=item.get("fabrications", []),
+                    price_point=item.get("price_point", "mid"),
+                    demographic=item.get("demographic", "junior_girls"),
+                    ai_analysis_text=item.get("narrative", ""),
+                    likes=item.get("estimated_likes", 1000),
+                    comments=item.get("estimated_comments", 200),
+                    shares=item.get("estimated_shares", 50),
+                    views=item.get("estimated_views", 10000),
+                    engagement_rate=0.0,
+                    status="active",
+                )
+
+                trend = ScoringService.update_trend_scores(trend)
+
+                db.add(trend)
+                db.commit()
+                db.refresh(trend)
+
+                metrics = TrendMetricsHistory(
+                    trend_item_id=trend.id,
+                    likes=trend.likes,
+                    comments=trend.comments,
+                    shares=trend.shares,
+                    views=trend.views,
+                    trend_score=trend.trend_score,
+                )
+                db.add(metrics)
+                db.commit()
+
+                _seed_status["created"] += 1
+
+            except Exception as e:
+                db.rollback()
+                print(f"Error creating seed trend: {e}")
+                _seed_status["errors"] += 1
+    finally:
+        db.close()
+
+    _seed_status["progress"] = "Complete!"
+    _seed_status["running"] = False
+    _seed_status["done"] = True
+
+
+@router.post("/seed")
 async def seed_trends_from_sources(
     db: Session = Depends(get_db),
 ):
     """
-    Generate AI seed trends from all ecommerce sources.
-    Uses Claude to create realistic trending products for each brand.
+    Start AI seed trend generation in the background.
+    Returns immediately — poll GET /api/trends/seed/status for progress.
     """
+    global _seed_status
+
+    if _seed_status["running"]:
+        return {"message": "Seed generation already in progress", "status": _seed_status}
+
     # Get all active ecommerce sources
     ecommerce = db.query(MonitoringTarget).filter(
         MonitoringTarget.type == "source",
@@ -168,84 +284,20 @@ async def seed_trends_from_sources(
         for s in ecommerce
     ]
 
-    try:
-        results = await AIService.generate_seed_trends(brands)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Seed generation failed: {str(e)}")
+    # Launch background thread
+    thread = threading.Thread(target=_run_seed_in_background, args=(brands,), daemon=True)
+    thread.start()
 
-    created = 0
-    skipped = 0
-    errors = 0
+    return {
+        "message": f"Seed generation started for {len(brands)} brands. Poll /api/trends/seed/status for progress.",
+        "total_brands": len(brands),
+    }
 
-    for item in results:
-        try:
-            product_url = item.get("product_url", "")
-            if not product_url:
-                errors += 1
-                continue
 
-            # Check for duplicate URL
-            existing = db.query(TrendItem).filter(TrendItem.url == product_url).first()
-            if existing:
-                skipped += 1
-                continue
-
-            # Create the trend item
-            trend = TrendItem(
-                url=product_url,
-                source_platform="ecommerce",
-                submitted_by="AI Seed Generator",
-                image_url=None,
-                source_id=item.get("source_id"),
-                category=item.get("category"),
-                subcategory=None,
-                colors=item.get("colors", []),
-                patterns=item.get("patterns", []),
-                style_tags=item.get("style_tags", []),
-                fabrications=item.get("fabrications", []),
-                price_point=item.get("price_point", "mid"),
-                demographic=item.get("demographic", "junior_girls"),
-                ai_analysis_text=item.get("narrative", ""),
-                likes=item.get("estimated_likes", 1000),
-                comments=item.get("estimated_comments", 200),
-                shares=item.get("estimated_shares", 50),
-                views=item.get("estimated_views", 10000),
-                engagement_rate=0.0,
-                status="active",
-            )
-
-            # Calculate scores
-            trend = ScoringService.update_trend_scores(trend)
-
-            db.add(trend)
-            db.commit()
-            db.refresh(trend)
-
-            # Record initial metrics
-            metrics = TrendMetricsHistory(
-                trend_item_id=trend.id,
-                likes=trend.likes,
-                comments=trend.comments,
-                shares=trend.shares,
-                views=trend.views,
-                trend_score=trend.trend_score,
-            )
-            db.add(metrics)
-            db.commit()
-
-            created += 1
-
-        except Exception as e:
-            db.rollback()
-            print(f"Error creating seed trend: {e}")
-            errors += 1
-
-    return SeedGenerationResponse(
-        created=created,
-        skipped=skipped,
-        sources_processed=len(ecommerce),
-        errors=errors,
-    )
+@router.get("/seed/status")
+async def seed_status():
+    """Poll this endpoint to get the progress of seed trend generation."""
+    return _seed_status
 
 
 @router.get("/metrics/{trend_id}", response_model=List[TrendMetricsResponse])

@@ -37,7 +37,21 @@ export const getTrendMetrics = async (id: string): Promise<TrendMetrics> => {
   return response.data
 }
 
-export const seedTrendsFromSources = async (): Promise<SeedGenerationResponse> => {
-  const response = await client.post<SeedGenerationResponse>('/trends/seed')
+export const startSeedGeneration = async (): Promise<{ message: string; total_brands: number }> => {
+  const response = await client.post('/trends/seed')
+  return response.data
+}
+
+export const getSeedStatus = async (): Promise<{
+  running: boolean
+  progress: string
+  created: number
+  skipped: number
+  errors: number
+  total_brands: number
+  brands_processed: number
+  done: boolean
+}> => {
+  const response = await client.get('/trends/seed/status')
   return response.data
 }
