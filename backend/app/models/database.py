@@ -1,8 +1,11 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import QueuePool, NullPool
 from app.config import settings
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Determine database URL - use SQLite fallback for local development
 database_url = settings.DATABASE_URL
@@ -17,13 +20,27 @@ if database_url.startswith("postgres://"):
 if database_url.startswith("postgresql://postgres:postgres@localhost") and not os.getenv("DATABASE_URL"):
     database_url = "sqlite:///./trend_dashboard.db"
 
-# Create database engine
-engine = create_engine(
-    database_url,
-    poolclass=NullPool if not database_url.startswith("sqlite") else None,
-    echo=False,
-    connect_args={"check_same_thread": False} if database_url.startswith("sqlite") else {},
-)
+is_sqlite = database_url.startswith("sqlite")
+
+# Create database engine with proper connection pooling
+if is_sqlite:
+    engine = create_engine(
+        database_url,
+        echo=False,
+        connect_args={"check_same_thread": False},
+    )
+else:
+    # PostgreSQL: use connection pool (Railway free tier allows ~20 connections)
+    engine = create_engine(
+        database_url,
+        poolclass=QueuePool,
+        pool_size=5,
+        max_overflow=10,
+        pool_timeout=30,
+        pool_recycle=1800,  # Recycle connections every 30 min
+        pool_pre_ping=True,  # Verify connections are alive before using
+        echo=False,
+    )
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -65,6 +82,7 @@ def run_migrations():
                 stmt += f' DEFAULT {default}'
             with engine.begin() as conn:
                 conn.execute(text(stmt))
+            logger.info(f"Added column {column} to {table}")
 
     # --- monitoring_targets additions ---
     _add_column_if_missing("monitoring_targets", "source_url", "VARCHAR(2048)")
@@ -78,3 +96,7 @@ def run_migrations():
     _add_column_if_missing("trend_items", "demographic", "VARCHAR(50)")
     _add_column_if_missing("trend_items", "fabrications", "JSON")
     _add_column_if_missing("trend_items", "source_id", "INTEGER")
+
+    # --- people table (new) ---
+    # people table is created by create_tables() via SQLAlchemy models
+    # No migrations needed for new tables

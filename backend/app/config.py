@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     # Feature flags
     USE_MOCK_AI: bool = True
 
+    # Scraping
+    APIFY_TOKEN: str = ""
+    X_API_BEARER_TOKEN: str = ""
+
     # AWS S3
     AWS_S3_BUCKET: str = "trend-intelligence-assets"
     AWS_REGION: str = "us-east-1"

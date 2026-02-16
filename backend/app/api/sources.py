@@ -180,7 +180,6 @@ async def discover_social_debug(db: Session = Depends(get_db)):
     return {
         "mock_ai": settings.USE_MOCK_AI,
         "has_api_key": bool(settings.CLAUDE_API_KEY),
-        "api_key_prefix": settings.CLAUDE_API_KEY[:15] + "..." if settings.CLAUDE_API_KEY else "none",
         "ecommerce_count": len(ecommerce),
         "first_brands": [s.source_name for s in ecommerce[:3]],
     }

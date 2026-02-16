@@ -8,6 +8,7 @@ import MoodBoards from '@/pages/MoodBoards'
 import MoodBoardDetail from '@/pages/MoodBoardDetail'
 import MonitoringCenter from '@/pages/MonitoringCenter'
 import Analytics from '@/pages/Analytics'
+import People from '@/pages/People'
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="/trends/:id" element={<TrendDetail />} />
         <Route path="/moodboards" element={<MoodBoards />} />
         <Route path="/moodboards/:id" element={<MoodBoardDetail />} />
+        <Route path="/people" element={<People />} />
         <Route path="/monitoring" element={<MonitoringCenter />} />
         <Route path="/analytics" element={<Analytics />} />
       </Routes>

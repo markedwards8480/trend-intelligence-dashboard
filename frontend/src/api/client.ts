@@ -7,6 +7,7 @@ const client: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000, // 30s timeout for AI-heavy requests
 })
 
 // Request interceptor
@@ -29,9 +30,9 @@ client.interceptors.response.use(
     return response
   },
   (error) => {
+    // Log errors for debugging (no redirect to nonexistent /login)
     if (error.response?.status === 401) {
-      localStorage.removeItem('auth_token')
-      window.location.href = '/login'
+      console.warn('Received 401 Unauthorized — auth not yet implemented')
     }
     return Promise.reject(error)
   }
