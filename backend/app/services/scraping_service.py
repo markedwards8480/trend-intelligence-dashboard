@@ -31,15 +31,16 @@ class ScrapingService:
 
     @property
     def client(self):
-        """Lazy-init Apify client."""
+        """Lazy-init Apify client, auto-installing if needed."""
         if self._client is None:
             try:
                 from apify_client import ApifyClient
-                self._client = ApifyClient(self.apify_token)
             except ImportError:
-                raise RuntimeError(
-                    "apify-client not installed. Run: pip install apify-client"
-                )
+                logger.warning("apify-client not found, installing...")
+                import subprocess
+                subprocess.check_call(["pip", "install", "apify-client==1.8.1"])
+                from apify_client import ApifyClient
+            self._client = ApifyClient(self.apify_token)
         return self._client
 
     async def scrape_instagram_profile(
