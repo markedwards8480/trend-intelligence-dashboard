@@ -113,12 +113,12 @@ export async function getPostsFeed(params: {
   limit?: number
   offset?: number
 }): Promise<FeedResponse> {
-  const { data } = await client.get('/api/feed/posts', { params })
+  const { data } = await client.get('/feed/posts', { params })
   return data
 }
 
 export async function getFeedStats(days?: number): Promise<FeedStats> {
-  const { data } = await client.get('/api/feed/stats', { params: { days } })
+  const { data } = await client.get('/feed/stats', { params: { days } })
   return data
 }
 
@@ -126,6 +126,6 @@ export async function getTrendAnalysis(params?: {
   days?: number
   min_mentions?: number
 }): Promise<TrendAnalysis> {
-  const { data } = await client.get('/api/feed/trends', { params })
+  const { data } = await client.get('/feed/trends', { params })
   return data
 }
