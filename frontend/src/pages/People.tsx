@@ -361,6 +361,8 @@ export default function People() {
         <PersonDetailPanel
           person={selectedPerson}
           onClose={() => setSelectedPerson(null)}
+          onScrape={() => handleScrape(selectedPerson.id)}
+          scraping={scrapingPersonId === selectedPerson.id}
         />
       )}
     </div>
@@ -479,7 +481,7 @@ function PersonCard({
 
 // ============ Detail Panel ============
 
-function PersonDetailPanel({ person, onClose }: { person: Person; onClose: () => void }) {
+function PersonDetailPanel({ person, onClose, onScrape, scraping }: { person: Person; onClose: () => void; onScrape: () => void; scraping: boolean }) {
   return (
     <div className="fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl border-l border-accent-100 z-50 overflow-y-auto">
       <div className="p-6">
@@ -490,6 +492,16 @@ function PersonDetailPanel({ person, onClose }: { person: Person; onClose: () =>
             ×
           </button>
         </div>
+
+        {/* Scrape Button */}
+        <button
+          onClick={onScrape}
+          disabled={scraping}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 mb-6 rounded-xl text-sm font-medium bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600 transition-all shadow-sm disabled:opacity-50"
+        >
+          <RefreshCw className={`w-4 h-4 ${scraping ? 'animate-spin' : ''}`} />
+          {scraping ? 'Scraping latest posts...' : 'Scrape Latest Posts'}
+        </button>
 
         {/* Type & Tier */}
         <div className="flex items-center gap-2 mb-4">
