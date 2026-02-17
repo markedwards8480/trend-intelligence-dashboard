@@ -278,20 +278,41 @@ async def add_platform_to_person(
 @router.post("/{person_id}/scrape")
 async def scrape_person(person_id: int, db: Session = Depends(get_db)):
     """Trigger a scrape for a specific person."""
+    from app.config import settings
+
     person = db.query(Person).options(
         joinedload(Person.platforms)
     ).filter(Person.id == person_id).first()
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
 
+    token_configured = bool(settings.APIFY_TOKEN and len(settings.APIFY_TOKEN) > 5)
+    platforms_info = [
+        {"platform": p.platform, "handle": p.handle, "enabled": p.scrape_enabled}
+        for p in person.platforms
+    ]
+
     from app.services.scraping_service import ScrapingService
     scraper = ScrapingService()
 
     try:
-        new_posts = await scraper.scrape_person(person, db)
-        return {"status": "completed", "new_posts": new_posts, "person": person.name}
+        result = await scraper.scrape_person(person, db)
+        return {
+            "status": "completed",
+            "new_posts": result["new_posts"],
+            "person": person.name,
+            "token_configured": token_configured,
+            "platforms": platforms_info,
+            "debug": result.get("debug", []),
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "person": person.name,
+            "token_configured": token_configured,
+            "platforms": platforms_info,
+        }
 
 
 @router.get("/{person_id}/posts", response_model=List[ScrapedPostResponse])
@@ -349,8 +370,8 @@ async def scrape_batch(
 
     for person in unique:
         try:
-            new_posts = await scraper.scrape_person(person, db)
-            results["total_new_posts"] += new_posts
+            result = await scraper.scrape_person(person, db)
+            results["total_new_posts"] += result["new_posts"]
         except Exception as e:
             results["errors"].append({"name": person.name, "error": str(e)[:200]})
 

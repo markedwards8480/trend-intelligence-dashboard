@@ -132,16 +132,21 @@ class ScrapingService:
 
     async def scrape_person(
         self, person: Person, db: Session, max_posts_per_platform: int = 10
-    ) -> int:
+    ) -> dict:
         """
         Scrape all enabled platforms for a given person.
         Saves results to scraped_posts table.
-        Returns count of new posts saved.
+        Returns dict with count and debug info.
         """
         new_count = 0
+        debug_info = []
+
+        if not self.apify_token:
+            return {"new_posts": 0, "debug": ["NO APIFY_TOKEN configured — cannot scrape"]}
 
         for pp in person.platforms:
             if not pp.scrape_enabled:
+                debug_info.append(f"{pp.platform}/@{pp.handle}: scrape_enabled=False, skipped")
                 continue
 
             try:
@@ -150,8 +155,10 @@ class ScrapingService:
                 elif pp.platform == "tiktok":
                     posts = await self.scrape_tiktok_profile(pp.handle, max_posts_per_platform)
                 else:
-                    logger.info(f"Skipping unsupported platform {pp.platform} for {person.name}")
+                    debug_info.append(f"{pp.platform}/@{pp.handle}: unsupported platform, skipped")
                     continue
+
+                debug_info.append(f"{pp.platform}/@{pp.handle}: got {len(posts)} posts from Apify")
 
                 for post_data in posts:
                     # Skip if we already have this post
@@ -190,6 +197,7 @@ class ScrapingService:
                 pp.last_checked = datetime.utcnow()
 
             except Exception as e:
+                debug_info.append(f"{pp.platform}/@{pp.handle}: ERROR — {str(e)[:300]}")
                 logger.error(f"Error scraping {pp.platform} for {person.name}: {e}")
                 continue
 
@@ -198,7 +206,7 @@ class ScrapingService:
         db.commit()
 
         logger.info(f"Scraped {person.name}: {new_count} new posts")
-        return new_count
+        return {"new_posts": new_count, "debug": debug_info}
 
     async def scrape_hashtag_instagram(
         self, hashtag: str, max_posts: int = 20

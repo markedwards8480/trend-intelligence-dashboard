@@ -128,7 +128,8 @@ export default function People() {
     setScrapeResult(null)
     try {
       const result = await scrapePerson(personId)
-      setScrapeResult(`${result.person}: ${result.new_posts} new posts scraped`)
+      const debugMsg = result.debug?.length ? ` | ${result.debug.join('; ')}` : ''
+      setScrapeResult(`${result.person}: ${result.new_posts} new posts scraped${debugMsg}`)
       fetchData()
     } catch (err: any) {
       setScrapeResult(`Scrape failed: ${err?.response?.data?.detail || err.message}`)
