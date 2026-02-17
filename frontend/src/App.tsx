@@ -9,6 +9,7 @@ import MoodBoardDetail from '@/pages/MoodBoardDetail'
 import MonitoringCenter from '@/pages/MonitoringCenter'
 import Analytics from '@/pages/Analytics'
 import People from '@/pages/People'
+import Feed from '@/pages/Feed'
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/moodboards" element={<MoodBoards />} />
         <Route path="/moodboards/:id" element={<MoodBoardDetail />} />
         <Route path="/people" element={<People />} />
+        <Route path="/feed" element={<Feed />} />
         <Route path="/monitoring" element={<MonitoringCenter />} />
         <Route path="/analytics" element={<Analytics />} />
       </Routes>
