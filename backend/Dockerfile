@@ -17,9 +17,8 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements (cache bust: v2 — added apify-client)
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir apify-client==1.8.1
+# Install Python dependencies (cache bust: v3)
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code (includes static/ with built React frontend)
 COPY . .

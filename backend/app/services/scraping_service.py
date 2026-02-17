@@ -3,6 +3,7 @@ Scraping Service — orchestrates data collection from social media
 via Apify actors and official APIs.
 """
 
+import re
 import logging
 from datetime import datetime
 from typing import Optional
@@ -13,10 +14,10 @@ from app.models.people import Person, PersonPlatform, ScrapedPost
 
 logger = logging.getLogger(__name__)
 
-# Apify actor IDs for each platform
+# Correct Apify actor IDs (verified Feb 2026)
 APIFY_ACTORS = {
-    "instagram": "apify/instagram-post-scraper",
-    "tiktok": "clockworks/tiktok-scraper",
+    "instagram": "apify/instagram-scraper",        # General IG scraper — profiles, posts, hashtags
+    "tiktok": "clockworks/tiktok-scraper",          # TikTok profile/post scraper
     "twitter": "apify/twitter-scraper",
     "pinterest": "alexey/pinterest-crawler",
 }
@@ -38,7 +39,7 @@ class ScrapingService:
             except ImportError:
                 logger.warning("apify-client not found, installing...")
                 import subprocess
-                subprocess.check_call(["pip", "install", "apify-client==1.8.1"])
+                subprocess.check_call(["pip", "install", "apify-client>=2.4.0"])
                 from apify_client import ApifyClient
             self._client = ApifyClient(self.apify_token)
         return self._client
@@ -48,47 +49,70 @@ class ScrapingService:
     ) -> list[dict]:
         """
         Scrape recent posts from an Instagram profile via Apify.
-
-        Returns list of dicts with: post_url, image_urls, caption,
-        hashtags, likes, comments, posted_at, platform_post_id.
+        Uses apify/instagram-scraper with username input.
         """
         if not self.apify_token:
             logger.warning("No APIFY_TOKEN configured, returning empty results")
             return []
 
+        clean_handle = handle.lstrip("@")
+        logger.info(f"Starting IG scrape for @{clean_handle} (max {max_posts} posts)")
+
         actor = self.client.actor(APIFY_ACTORS["instagram"])
         run = actor.call(
             run_input={
-                "username": [handle.lstrip("@")],
+                "username": [clean_handle],
                 "resultsLimit": max_posts,
-                "resultsType": "posts",
             },
-            timeout_secs=120,
+            timeout_secs=180,
         )
 
+        logger.info(f"IG Apify run completed, dataset: {run.get('defaultDatasetId')}")
+
         results = []
+        item_count = 0
         for item in self.client.dataset(run["defaultDatasetId"]).iterate_items():
-            hashtags = []
+            item_count += 1
             caption = item.get("caption", "") or ""
-            # Extract hashtags from caption
-            import re
             hashtags = re.findall(r"#(\w+)", caption)
+
+            # Build post URL from various possible fields
+            post_url = (
+                item.get("url")
+                or item.get("postUrl")
+                or item.get("displayUrl")
+                or f"https://www.instagram.com/p/{item.get('shortCode', item.get('id', ''))}/",
+            )
+            if isinstance(post_url, tuple):
+                post_url = post_url[0]
+
+            # Gather image URLs from various possible fields
+            image_urls = []
+            if item.get("images"):
+                image_urls = item["images"] if isinstance(item["images"], list) else [item["images"]]
+            elif item.get("displayUrl"):
+                image_urls = [item["displayUrl"]]
+            elif item.get("imageUrl"):
+                image_urls = [item["imageUrl"]]
+
+            # Post ID from various possible fields
+            post_id = str(item.get("id") or item.get("shortCode") or item.get("pk") or f"ig_{item_count}")
 
             results.append({
                 "platform": "instagram",
-                "platform_post_id": item.get("id") or item.get("shortCode"),
-                "post_url": item.get("url") or f"https://www.instagram.com/p/{item.get('shortCode', '')}/",
-                "image_urls": item.get("images") or ([item["displayUrl"]] if item.get("displayUrl") else []),
+                "platform_post_id": post_id,
+                "post_url": post_url,
+                "image_urls": image_urls,
                 "caption": caption,
                 "hashtags": hashtags,
-                "likes": item.get("likesCount", 0),
-                "comments": item.get("commentsCount", 0),
-                "shares": 0,  # Instagram doesn't expose shares
-                "views": item.get("videoViewCount", 0),
-                "posted_at": item.get("timestamp"),
+                "likes": item.get("likesCount", 0) or item.get("likes", 0) or 0,
+                "comments": item.get("commentsCount", 0) or item.get("comments", 0) or 0,
+                "shares": 0,
+                "views": item.get("videoViewCount", 0) or item.get("videoPlayCount", 0) or 0,
+                "posted_at": item.get("timestamp") or item.get("takenAtTimestamp"),
             })
 
-        logger.info(f"Scraped {len(results)} posts from Instagram @{handle}")
+        logger.info(f"Scraped {len(results)} posts from Instagram @{clean_handle} ({item_count} items from Apify)")
         return results
 
     async def scrape_tiktok_profile(
@@ -98,37 +122,54 @@ class ScrapingService:
         if not self.apify_token:
             return []
 
+        clean_handle = handle.lstrip("@")
+        logger.info(f"Starting TikTok scrape for @{clean_handle}")
+
         actor = self.client.actor(APIFY_ACTORS["tiktok"])
         run = actor.call(
             run_input={
-                "profiles": [handle.lstrip("@")],
+                "profiles": [clean_handle],
                 "resultsPerPage": max_posts,
                 "shouldDownloadVideos": False,
             },
-            timeout_secs=120,
+            timeout_secs=180,
         )
 
+        logger.info(f"TikTok Apify run completed, dataset: {run.get('defaultDatasetId')}")
+
         results = []
+        item_count = 0
         for item in self.client.dataset(run["defaultDatasetId"]).iterate_items():
-            caption = item.get("text", "") or ""
-            import re
+            item_count += 1
+            caption = item.get("text", "") or item.get("desc", "") or ""
             hashtags = re.findall(r"#(\w+)", caption)
+
+            # Cover image from various possible fields
+            cover_url = None
+            if item.get("videoMeta", {}).get("coverUrl"):
+                cover_url = item["videoMeta"]["coverUrl"]
+            elif item.get("covers", {}).get("default"):
+                cover_url = item["covers"]["default"]
+            elif item.get("video", {}).get("cover"):
+                cover_url = item["video"]["cover"]
+
+            post_id = str(item.get("id", "") or f"tt_{item_count}")
 
             results.append({
                 "platform": "tiktok",
-                "platform_post_id": str(item.get("id", "")),
-                "post_url": item.get("webVideoUrl") or f"https://www.tiktok.com/@{handle}/video/{item.get('id', '')}",
-                "image_urls": [item["videoMeta"]["coverUrl"]] if item.get("videoMeta", {}).get("coverUrl") else [],
+                "platform_post_id": post_id,
+                "post_url": item.get("webVideoUrl") or item.get("url") or f"https://www.tiktok.com/@{clean_handle}/video/{post_id}",
+                "image_urls": [cover_url] if cover_url else [],
                 "caption": caption,
                 "hashtags": hashtags,
-                "likes": item.get("diggCount", 0),
-                "comments": item.get("commentCount", 0),
-                "shares": item.get("shareCount", 0),
-                "views": item.get("playCount", 0),
-                "posted_at": item.get("createTimeISO"),
+                "likes": item.get("diggCount", 0) or item.get("likes", 0) or 0,
+                "comments": item.get("commentCount", 0) or item.get("comments", 0) or 0,
+                "shares": item.get("shareCount", 0) or item.get("shares", 0) or 0,
+                "views": item.get("playCount", 0) or item.get("views", 0) or 0,
+                "posted_at": item.get("createTimeISO") or item.get("createTime"),
             })
 
-        logger.info(f"Scraped {len(results)} posts from TikTok @{handle}")
+        logger.info(f"Scraped {len(results)} posts from TikTok @{clean_handle} ({item_count} items from Apify)")
         return results
 
     async def scrape_person(
@@ -199,7 +240,7 @@ class ScrapingService:
 
             except Exception as e:
                 debug_info.append(f"{pp.platform}/@{pp.handle}: ERROR — {str(e)[:300]}")
-                logger.error(f"Error scraping {pp.platform} for {person.name}: {e}")
+                logger.error(f"Error scraping {pp.platform} for {person.name}: {e}", exc_info=True)
                 continue
 
         # Update person last_scraped
@@ -216,12 +257,11 @@ class ScrapingService:
         if not self.apify_token:
             return []
 
-        actor = self.client.actor("apify/instagram-hashtag-scraper")
+        actor = self.client.actor("apify/instagram-scraper")
         run = actor.call(
             run_input={
                 "hashtags": [hashtag.lstrip("#")],
                 "resultsLimit": max_posts,
-                "resultsType": "posts",
             },
             timeout_secs=120,
         )
@@ -229,7 +269,6 @@ class ScrapingService:
         results = []
         for item in self.client.dataset(run["defaultDatasetId"]).iterate_items():
             caption = item.get("caption", "") or ""
-            import re
             hashtags = re.findall(r"#(\w+)", caption)
 
             results.append({
