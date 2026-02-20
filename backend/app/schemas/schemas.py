@@ -385,3 +385,53 @@ class FeedbackSummary(BaseModel):
     liked_categories: List[str] = []
     disliked_categories: List[str] = []
     liked_sources: List[str] = []
+
+
+# ============ Trend Insights Schemas ============
+
+class TrendInsightResponse(BaseModel):
+    """AI-generated category trend summary."""
+    id: int
+    category: str
+    summary: str
+    key_characteristics: Dict[str, Any]
+    trending_items_count: int
+    avg_trend_score: float
+    style_tags_distribution: Dict[str, Any]
+    generated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ThemedLookResponse(BaseModel):
+    """AI-generated themed fashion aesthetic."""
+    id: int
+    theme_name: str
+    description: str
+    color_palette: List[str]
+    key_items: List[Dict[str, Any]]
+    style_tags: List[str]
+    mood_description: Optional[str]
+    demographic_appeal: List[str]
+    featured_trend_ids: Optional[List[int]]
+    generated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class InsightsResponse(BaseModel):
+    """Combined response for insights + themed looks."""
+    category_insights: List[TrendInsightResponse]
+    themed_looks: List[ThemedLookResponse]
+    generated_at: Optional[datetime] = None
+
+
+class InsightsStatusResponse(BaseModel):
+    """Status of insights generation job."""
+    status: str  # idle, running, completed, failed
+    progress: Optional[str] = None
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    error: Optional[str] = None

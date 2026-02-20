@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { TrendingUp, Zap, Palette, Heart, Sparkles, Check, X, RefreshCw, ExternalLink } from 'lucide-react'
 import { useTrends } from '@/hooks/useTrends'
 import TrendCard from '@/components/TrendCard'
+import InsightsSection from '@/components/InsightsSection'
 import { TrendItem, DEMOGRAPHICS, DEMOGRAPHIC_SHORT_LABELS, Demographic } from '@/types'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -176,8 +177,26 @@ export default function Dashboard() {
         })}
       </div>
 
+      {/* AI Insights Section */}
+      <InsightsSection
+        demographic={demographic}
+        onFilterByCategory={(cat) => {
+          setCategory(cat)
+          // Scroll down to trends grid
+          document.getElementById('trends-grid')?.scrollIntoView({ behavior: 'smooth' })
+        }}
+        onFilterByStyleTags={(tags) => {
+          // Clear other filters and let the style-tag-filtered trends show
+          setCategory('')
+          setPlatform('')
+          setSortBy('score')
+          // For now, scroll to grid — style tag filtering would need additional state
+          document.getElementById('trends-grid')?.scrollIntoView({ behavior: 'smooth' })
+        }}
+      />
+
       {/* Filters */}
-      <div className="card p-6 mb-8">
+      <div className="card p-6 mb-8" id="trends-grid">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Category Filter */}
           <div>

@@ -194,3 +194,49 @@ export interface TrendDetailResponse extends TrendItem {
   metrics?: TrendMetrics
   similar_items?: TrendItem[]
 }
+
+// ============ Insights & Themed Looks ============
+
+export interface TrendInsight {
+  id: number
+  category: string
+  summary: string
+  key_characteristics: {
+    dominant_colors?: string[]
+    dominant_styles?: string[]
+    dominant_patterns?: string[]
+    dominant_fabrications?: string[]
+    price_trend?: string
+  }
+  trending_items_count: number
+  avg_trend_score: number
+  style_tags_distribution: Record<string, number>
+  generated_at: string
+}
+
+export interface ThemedLook {
+  id: number
+  theme_name: string
+  description: string
+  color_palette: string[]
+  key_items: Array<{ category: string; description: string }>
+  style_tags: string[]
+  mood_description: string | null
+  demographic_appeal: string[]
+  featured_trend_ids: number[] | null
+  generated_at: string
+}
+
+export interface InsightsData {
+  category_insights: TrendInsight[]
+  themed_looks: ThemedLook[]
+  generated_at: string | null
+}
+
+export interface InsightsStatus {
+  status: 'idle' | 'running' | 'completed' | 'failed'
+  progress: string | null
+  started_at: string | null
+  completed_at: string | null
+  error: string | null
+}

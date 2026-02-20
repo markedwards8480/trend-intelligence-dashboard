@@ -608,6 +608,129 @@ Return ONLY valid JSON, no additional text."""
             raise
 
     @staticmethod
+    def generate_category_insights_sync(category_data: List[Dict]) -> List[Dict]:
+        """
+        Generate AI summaries for each fashion category based on aggregated trend data.
+        Synchronous version for use in background threads.
+
+        Args:
+            category_data: List of dicts with category name, top colors, styles, patterns,
+                           fabrications, item count, avg score, demographics
+
+        Returns:
+            List of dicts with category, summary, key_characteristics
+        """
+        if not settings.CLAUDE_API_KEY:
+            raise ValueError("CLAUDE_API_KEY not configured")
+
+        from anthropic import Anthropic
+        import json
+
+        client = Anthropic(api_key=settings.CLAUDE_API_KEY)
+
+        # Build the data summary for Claude
+        category_summaries = []
+        for cat in category_data:
+            category_summaries.append(
+                f"**{cat['category']}** ({cat['count']} items, avg score {cat['avg_score']:.1f}):\n"
+                f"  Colors: {', '.join(cat.get('top_colors', []))}\n"
+                f"  Patterns: {', '.join(cat.get('top_patterns', []))}\n"
+                f"  Styles: {', '.join(cat.get('top_styles', []))}\n"
+                f"  Fabrications: {', '.join(cat.get('top_fabrications', []))}\n"
+                f"  Demographics: {', '.join(cat.get('demographics', []))}\n"
+                f"  Price points: {', '.join(cat.get('price_points', []))}"
+            )
+
+        data_block = "\n\n".join(category_summaries)
+
+        prompt = f"""You are the chief trend analyst for Mark Edwards Apparel, a women's fast fashion company targeting junior girls (15-25). You're analyzing aggregated data from 40+ ecommerce brand sources tracking current fashion trends in early 2026.
+
+Here is the aggregated trend data by category:
+
+{data_block}
+
+For EACH category above, write a compelling 2-3 sentence trend insight summary that:
+1. Describes what's currently trending in this category
+2. Highlights the dominant colors, styles, and aesthetics
+3. Notes any emerging patterns or shifts relevant to the junior market
+
+Return ONLY valid JSON as an array of objects with these fields:
+- category: The category name (must match exactly)
+- summary: Your 2-3 sentence trend narrative
+- key_characteristics: Object with "dominant_colors" (array), "dominant_styles" (array), "dominant_patterns" (array), "dominant_fabrications" (array), "price_trend" (string)
+
+Return ONLY valid JSON, no additional text."""
+
+        message = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=8192,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        response_text = message.content[0].text
+        cleaned = _clean_json_response(response_text)
+        return json.loads(cleaned)
+
+    @staticmethod
+    def generate_themed_looks_sync(all_trend_summary: str, categories: List[str]) -> List[Dict]:
+        """
+        Generate creative themed fashion looks by combining trending items.
+        Synchronous version for use in background threads.
+
+        Args:
+            all_trend_summary: Text summary of all current trends
+            categories: List of available categories
+
+        Returns:
+            List of themed look dicts
+        """
+        if not settings.CLAUDE_API_KEY:
+            raise ValueError("CLAUDE_API_KEY not configured")
+
+        from anthropic import Anthropic
+        import json
+
+        client = Anthropic(api_key=settings.CLAUDE_API_KEY)
+
+        prompt = f"""You are a creative fashion director for Mark Edwards Apparel, creating themed lookbook concepts based on current trend data from 40+ ecommerce brands in early 2026.
+
+Current trend landscape:
+{all_trend_summary}
+
+Available product categories: {', '.join(categories)}
+
+Create 6-8 CREATIVE THEMED LOOKS that combine currently trending items into cohesive, marketable aesthetics. Think of these like mood board themes — each should tell a style story.
+
+Examples of the kind of themes we want (but create ORIGINAL ones based on the actual data):
+- "Collegiate Ballerina" — preppy meets ballet-inspired feminine pieces
+- "Vintage Rodeo" — western-influenced retro pieces with modern edge
+- "Digital Nomad" — functional meets fashion for the remote work aesthetic
+- "Soft Power" — quiet luxury with a youthful twist
+
+For EACH themed look, provide:
+- theme_name: A catchy, creative 2-3 word name
+- description: 2-3 sentence description of the aesthetic
+- color_palette: Array of 3-5 colors that define this look
+- key_items: Array of 3-5 objects, each with "category" and "description" (e.g., {{"category": "midi skirt", "description": "pleated satin in blush tones"}})
+- style_tags: Array of 3-5 relevant style tags
+- mood_description: One sentence of marketing-ready vibe copy
+- demographic_appeal: Array of demographics this appeals to from ["junior_girls", "young_women", "contemporary", "kids"]
+
+Make the themes CREATIVE, CURRENT, and DIVERSE — cover different aesthetics and demographics. Base them on what's ACTUALLY trending in the data.
+
+Return ONLY valid JSON as an array of themed look objects. No additional text."""
+
+        message = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=8192,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        response_text = message.content[0].text
+        cleaned = _clean_json_response(response_text)
+        return json.loads(cleaned)
+
+    @staticmethod
     async def generate_recommendations(
         existing_sources: list,
         liked: list = None,
