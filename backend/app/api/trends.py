@@ -128,12 +128,24 @@ async def get_daily_trends(
     """
     query = db.query(TrendItem).filter(TrendItem.status == "active")
 
+    # Platform group → actual platform values mapping
+    PLATFORM_GROUPS = {
+        "social": ["instagram", "tiktok", "pinterest", "facebook", "twitter", "snapchat", "youtube", "threads"],
+        "ecommerce": ["ecommerce"],
+        "media": ["fashion_media", "blog", "magazine", "editorial"],
+        "search": ["google_trends", "search"],
+    }
+
     # Apply filters (accept both field names)
     plat = source_platform or platform
     if category:
         query = query.filter(TrendItem.category == category)
     if plat:
-        query = query.filter(TrendItem.source_platform == plat)
+        # Check if it's a group name or a specific platform
+        if plat in PLATFORM_GROUPS:
+            query = query.filter(TrendItem.source_platform.in_(PLATFORM_GROUPS[plat]))
+        else:
+            query = query.filter(TrendItem.source_platform == plat)
     if demographic:
         query = query.filter(TrendItem.demographic == demographic)
 

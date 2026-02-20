@@ -26,6 +26,8 @@ export default function Dashboard() {
   const [generatingRecs, setGeneratingRecs] = useState(false)
 
   const { trends: fetchedTrends, loading } = useTrends({ category, platform, demographic, sort_by: sortBy })
+  // Unfiltered fetch for global stats
+  const { trends: allTrends } = useTrends({ sort_by: 'score', limit: 500 })
 
   // Fetch recommendations on mount
   useEffect(() => {
@@ -68,19 +70,19 @@ export default function Dashboard() {
     setDisplayTrends(filtered)
   }, [fetchedTrends, sortBy])
 
-  // Compute dynamic stats from real data
-  const totalTrends = fetchedTrends.length
+  // Compute dynamic stats from ALL data (not filtered)
+  const totalTrends = allTrends.length
   const today = new Date().toISOString().split('T')[0]
-  const newToday = fetchedTrends.filter((t) => t.created_at?.startsWith(today)).length
+  const newToday = allTrends.filter((t) => t.created_at?.startsWith(today)).length
 
   // Find the most common color
   const colorCounts: Record<string, number> = {}
-  fetchedTrends.forEach((t) => (t.colors || []).forEach((c) => { colorCounts[c] = (colorCounts[c] || 0) + 1 }))
+  allTrends.forEach((t) => (t.colors || []).forEach((c) => { colorCounts[c] = (colorCounts[c] || 0) + 1 }))
   const trendingColor = Object.entries(colorCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '—'
 
   // Find the top category
   const catCounts: Record<string, number> = {}
-  fetchedTrends.forEach((t) => { if (t.category) catCounts[t.category] = (catCounts[t.category] || 0) + 1 })
+  allTrends.forEach((t) => { if (t.category) catCounts[t.category] = (catCounts[t.category] || 0) + 1 })
   const topCategory = Object.entries(catCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '—'
 
   const stats = [

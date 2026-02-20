@@ -127,7 +127,7 @@ export default function People() {
     setScrapingPersonId(personId)
     setScrapeResult(null)
     try {
-      const result = await scrapePerson(personId)
+      const result = await scrapePerson(personId) as any
       const debugMsg = result.debug?.length ? ` | ${result.debug.join('; ')}` : ''
       setScrapeResult(`${result.person}: ${result.new_posts} new posts scraped${debugMsg}`)
       fetchData()
