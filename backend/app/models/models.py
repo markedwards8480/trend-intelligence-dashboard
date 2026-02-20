@@ -194,3 +194,41 @@ class UserFeedback(Base):
         Index("idx_feedback_entity", "entity_type", "entity_id"),
         UniqueConstraint("entity_type", "entity_id", "feedback_type", name="uq_feedback_entity"),
     )
+
+
+class TrendInsight(Base):
+    """AI-generated insight/summary for a trend category."""
+    __tablename__ = "trend_insights"
+
+    id = Column(Integer, primary_key=True, index=True)
+    category = Column(String(100), nullable=False, unique=True, index=True)
+    summary = Column(Text, nullable=False)
+    key_characteristics = Column(JSON, nullable=False, default=dict)
+    trending_items_count = Column(Integer, default=0)
+    avg_trend_score = Column(Float, default=0.0)
+    style_tags_distribution = Column(JSON, nullable=False, default=dict)
+    generated_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_trend_insights_date", "generated_at"),
+    )
+
+
+class ThemedLook(Base):
+    """AI-curated themed fashion aesthetic combining trending items."""
+    __tablename__ = "themed_looks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    theme_name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    color_palette = Column(JSON, nullable=False, default=list)
+    key_items = Column(JSON, nullable=False, default=list)
+    style_tags = Column(JSON, nullable=False, default=list)
+    mood_description = Column(Text, nullable=True)
+    demographic_appeal = Column(JSON, nullable=False, default=list)
+    featured_trend_ids = Column(JSON, nullable=True)
+    generated_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_themed_looks_date", "generated_at"),
+    )
