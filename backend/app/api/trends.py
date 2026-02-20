@@ -402,6 +402,252 @@ async def seed_status():
     return _seed_status
 
 
+# ============ Social Media Seed Generation ============
+
+_social_seed_status = {
+    "running": False,
+    "done": False,
+    "created": 0,
+    "skipped": 0,
+    "errors": 0,
+    "progress": "",
+}
+
+
+def _run_social_seed_in_background(accounts: list):
+    """Background worker: generates social media trend posts and saves to DB."""
+    import json
+    import re
+    import time
+    import traceback
+    from app.config import settings
+
+    global _social_seed_status
+    _social_seed_status["running"] = True
+    _social_seed_status["done"] = False
+    _social_seed_status["created"] = 0
+    _social_seed_status["skipped"] = 0
+    _social_seed_status["errors"] = 0
+    _social_seed_status["progress"] = "Starting social media AI generation..."
+
+    def _clean(text):
+        text = text.strip()
+        text = re.sub(r'^```(?:json)?\s*\n?', '', text)
+        text = re.sub(r'\n?```\s*$', '', text)
+        text = text.strip()
+        text = re.sub(r',\s*}', '}', text)
+        text = re.sub(r',\s*]', ']', text)
+        return text
+
+    all_results = []
+    batch_size = 8
+    posts_per_account = 3
+
+    try:
+        from anthropic import Anthropic
+        client = Anthropic(api_key=settings.CLAUDE_API_KEY)
+
+        for i in range(0, len(accounts), batch_size):
+            batch = accounts[i:i + batch_size]
+            batch_num = i // batch_size + 1
+            total_batches = (len(accounts) + batch_size - 1) // batch_size
+            _social_seed_status["progress"] = f"Processing batch {batch_num}/{total_batches}..."
+
+            account_list = "\n".join(
+                f"- {a.get('name', 'Unknown')} (@{a.get('handle', '')}) on {a.get('platform', 'instagram')} — {a.get('url', '')}"
+                for a in batch
+            )
+
+            prompt = f"""You are helping a women's fast fashion apparel company (Mark Edwards Apparel) populate their trend intelligence dashboard with realistic SOCIAL MEDIA trending posts from brand and influencer accounts in early 2026.
+
+For each social media account below, generate {posts_per_account} REALISTIC trending posts that this account would publish. These should be the kind of viral, high-engagement fashion content that drives trends.
+
+Accounts:
+{account_list}
+
+For EACH post, provide:
+- account_name: The account name (must match exactly)
+- platform: The social media platform (instagram, tiktok, pinterest — must match the account's platform)
+- post_url: A realistic post URL (use real URL patterns like instagram.com/p/xxx, tiktok.com/@user/video/xxx, pinterest.com/pin/xxx)
+- post_type: "reel" | "carousel" | "story" | "video" | "pin" | "outfit_post" | "haul" | "styling_tip" | "trend_alert"
+- category: Fashion category (e.g., "midi dress", "crop top", "cargo pants", "mini skirt", "oversized blazer", "platform sneakers", "slip dress", "wide leg jeans", "tank top", "maxi dress", "leggings", "puffer jacket", "blazer", "boots")
+- colors: Array of 1-3 colors
+- patterns: Array of patterns
+- style_tags: Array of 2-4 trending style tags (e.g., ["quiet luxury", "clean girl"], ["mob wife", "coastal cowgirl"], ["coquette", "balletcore"], ["dark academia", "preppy"])
+- fabrications: Array of materials
+- price_point: "budget" | "mid" | "luxury"
+- demographic: "junior_girls" | "young_women" | "contemporary"
+- caption: A realistic social media caption (1-2 sentences with hashtags)
+- estimated_likes: Realistic social media scale — 1000-500000
+- estimated_comments: 100-50000
+- estimated_shares: 50-100000
+- estimated_views: 10000-5000000
+
+IMPORTANT: Make posts realistic for each account's actual content style. TikTok posts should feel like TikTok (viral outfit checks, hauls). Instagram should feel like Instagram (curated aesthetics, reels). Pinterest should feel like Pinterest (mood boards, outfit inspo).
+
+Return ONLY valid JSON as a flat array of post objects. No additional text."""
+
+            try:
+                message = client.messages.create(
+                    model="claude-sonnet-4-5-20250929",
+                    max_tokens=8192,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+
+                response_text = message.content[0].text
+                cleaned = _clean(response_text)
+                batch_results = json.loads(cleaned)
+
+                # Attach source_id from our account list
+                account_id_map = {a.get('name', ''): a.get('id') for a in batch}
+                for item in batch_results:
+                    acct_name = item.get('account_name', '')
+                    item['source_id'] = account_id_map.get(acct_name)
+                all_results.extend(batch_results)
+
+                _social_seed_status["progress"] = f"Batch {batch_num}/{total_batches} done — {len(all_results)} posts so far"
+
+            except json.JSONDecodeError as je:
+                print(f"JSON parse error on social seed batch {batch_num}: {je}")
+                _social_seed_status["progress"] = f"Batch {batch_num} had JSON error, continuing..."
+            except Exception as e:
+                print(f"Error on social seed batch {batch_num}: {e}")
+                traceback.print_exc()
+                _social_seed_status["progress"] = f"Batch {batch_num} error: {str(e)[:100]}, continuing..."
+
+            if i + batch_size < len(accounts):
+                time.sleep(1)
+
+    except Exception as e:
+        _social_seed_status["progress"] = f"AI generation failed: {str(e)}"
+        _social_seed_status["running"] = False
+        _social_seed_status["done"] = True
+        traceback.print_exc()
+        return
+
+    _social_seed_status["progress"] = f"Saving {len(all_results)} social media trends to database..."
+
+    db = SessionLocal()
+    try:
+        for item in all_results:
+            try:
+                post_url = item.get("post_url", "")
+                if not post_url:
+                    _social_seed_status["errors"] += 1
+                    continue
+
+                existing = db.query(TrendItem).filter(TrendItem.url == post_url).first()
+                if existing:
+                    _social_seed_status["skipped"] += 1
+                    continue
+
+                plat = item.get("platform", "instagram").lower().strip()
+
+                trend = TrendItem(
+                    url=post_url,
+                    source_platform=plat,
+                    submitted_by="AI Social Media Seed",
+                    image_url=None,
+                    source_id=item.get("source_id"),
+                    category=item.get("category"),
+                    subcategory=item.get("post_type"),
+                    colors=item.get("colors", []),
+                    patterns=item.get("patterns", []),
+                    style_tags=item.get("style_tags", []),
+                    fabrications=item.get("fabrications", []),
+                    price_point=item.get("price_point", "mid"),
+                    demographic=item.get("demographic", "junior_girls"),
+                    ai_analysis_text=item.get("caption", ""),
+                    likes=item.get("estimated_likes", 5000),
+                    comments=item.get("estimated_comments", 500),
+                    shares=item.get("estimated_shares", 200),
+                    views=item.get("estimated_views", 50000),
+                    engagement_rate=0.0,
+                    status="active",
+                )
+
+                trend = ScoringService.update_trend_scores(trend)
+
+                db.add(trend)
+                db.commit()
+                db.refresh(trend)
+
+                metrics = TrendMetricsHistory(
+                    trend_item_id=trend.id,
+                    likes=trend.likes,
+                    comments=trend.comments,
+                    shares=trend.shares,
+                    views=trend.views,
+                    trend_score=trend.trend_score,
+                )
+                db.add(metrics)
+                db.commit()
+
+                _social_seed_status["created"] += 1
+
+            except Exception as e:
+                db.rollback()
+                print(f"Error creating social seed trend: {e}")
+                _social_seed_status["errors"] += 1
+    finally:
+        db.close()
+
+    _social_seed_status["progress"] = "Complete!"
+    _social_seed_status["running"] = False
+    _social_seed_status["done"] = True
+
+
+@router.post("/seed/social")
+async def seed_social_media_trends(
+    db: Session = Depends(get_db),
+):
+    """
+    Start AI social media seed generation in the background.
+    Generates trending posts from social media sources (Instagram, TikTok, Pinterest).
+    Poll GET /api/trends/seed/social/status for progress.
+    """
+    global _social_seed_status
+
+    if _social_seed_status["running"]:
+        return {"message": "Social seed generation already in progress", "status": _social_seed_status}
+
+    # Get all active social media sources
+    social_platforms = ["instagram", "tiktok", "pinterest", "facebook", "twitter", "youtube"]
+    social_sources = db.query(MonitoringTarget).filter(
+        MonitoringTarget.type == "source",
+        MonitoringTarget.platform.in_(social_platforms),
+        MonitoringTarget.active == True,
+    ).all()
+
+    if not social_sources:
+        raise HTTPException(status_code=400, detail="No social media sources found.")
+
+    accounts = [
+        {
+            "name": s.source_name,
+            "handle": s.source_name.replace(" ", "").lower(),
+            "url": s.source_url,
+            "platform": s.platform,
+            "id": s.id,
+        }
+        for s in social_sources
+    ]
+
+    thread = threading.Thread(target=_run_social_seed_in_background, args=(accounts,), daemon=True)
+    thread.start()
+
+    return {
+        "message": f"Social media seed generation started for {len(accounts)} accounts. Poll /api/trends/seed/social/status for progress.",
+        "total_accounts": len(accounts),
+    }
+
+
+@router.get("/seed/social/status")
+async def social_seed_status():
+    """Poll this endpoint to get the progress of social media seed generation."""
+    return _social_seed_status
+
+
 @router.post("/backfill-images")
 async def backfill_images(
     force: bool = Query(False, description="Re-assign images even if one exists"),
